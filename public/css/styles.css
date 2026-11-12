@@ -475,22 +475,38 @@ svg {
 }
 
 .stage-panel {
+  position: relative;
   display: flex;
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  padding: 22px 26px 16px;
+  padding: 10px 14px 12px;
   overflow: hidden;
   border-right: 1px solid var(--line);
 }
 
 .stage-toolbar {
+  position: absolute;
+  z-index: 4;
+  top: 12px;
+  right: 14px;
+  left: 14px;
   display: flex;
-  flex: 0 0 auto;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 13px;
+  gap: 12px;
+  margin: 0;
+  pointer-events: none;
+}
+
+.stage-toolbar-title {
+  min-width: 0;
+  padding: 7px 9px;
+  background: rgba(251, 250, 246, 0.88);
+  border: 1px solid rgba(190, 186, 176, 0.72);
+  border-radius: 5px;
+  box-shadow: 0 5px 18px rgba(28, 30, 27, 0.08);
+  backdrop-filter: blur(9px);
 }
 
 .stage-toolbar h2,
@@ -499,6 +515,13 @@ svg {
   font-size: 17px;
   font-weight: 650;
   letter-spacing: 0;
+}
+
+.stage-toolbar h2 {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .stage-dimensions {
@@ -517,6 +540,13 @@ svg {
   flex: 0 0 auto;
   align-items: center;
   gap: 7px;
+  padding: 4px;
+  background: rgba(251, 250, 246, 0.88);
+  border: 1px solid rgba(190, 186, 176, 0.72);
+  border-radius: 6px;
+  box-shadow: 0 5px 18px rgba(28, 30, 27, 0.08);
+  backdrop-filter: blur(9px);
+  pointer-events: auto;
 }
 
 .view-toggle {
@@ -554,7 +584,7 @@ svg {
   width: 100%;
   max-width: 100%;
   min-height: 180px;
-  height: min(420px, 72%);
+  height: min(580px, 88%);
   max-height: 100%;
   flex: 0 1 auto;
   overflow: hidden;
@@ -594,18 +624,45 @@ svg {
 }
 
 .canvas-corner-label {
-  top: 13px;
+  top: 62px;
   left: 17px;
 }
 
 .audience-label {
-  right: 44px;
-  bottom: 12px;
+  right: 18px;
+  bottom: 62px;
 }
 
 .canvas-frame.is-dark .canvas-corner-label,
 .canvas-frame.is-dark .audience-label {
   color: #8fa0a5;
+}
+
+.canvas-frame.is-dark .stage-toolbar-title,
+.canvas-frame.is-dark .stage-toolbar-controls {
+  color: #eef2f0;
+  background: rgba(23, 31, 34, 0.88);
+  border-color: rgba(87, 103, 107, 0.8);
+}
+
+.canvas-frame.is-dark .stage-toolbar .panel-label {
+  color: #8fa0a5;
+}
+
+.canvas-frame.is-dark .stage-toolbar h2 {
+  color: #f7f7f3;
+}
+
+.canvas-frame.is-dark .stage-dimensions {
+  color: #c1cac9;
+  background: #2a3539;
+  border-color: #46555a;
+}
+
+.canvas-frame.is-dark .view-toggle:not(.is-active) {
+  color: #c4cdcb;
+  background: #263136;
+  border-color: #45545a;
 }
 
 .stage-resize-handle {
@@ -685,18 +742,29 @@ svg {
 }
 
 .transport-bar {
+  position: absolute;
+  z-index: 4;
+  right: 52px;
+  bottom: 12px;
+  left: 14px;
   display: flex;
-  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding-top: 13px;
+  pointer-events: none;
 }
 
 .transport-controls {
   display: flex;
   align-items: center;
   gap: 7px;
+  padding: 4px;
+  background: rgba(251, 250, 246, 0.88);
+  border: 1px solid rgba(190, 186, 176, 0.72);
+  border-radius: 6px;
+  box-shadow: 0 5px 18px rgba(28, 30, 27, 0.08);
+  backdrop-filter: blur(9px);
+  pointer-events: auto;
 }
 
 .play-button {
@@ -719,14 +787,38 @@ svg {
   display: flex;
   align-items: center;
   gap: 9px;
+  padding: 7px 9px;
   color: #888985;
+  background: rgba(251, 250, 246, 0.82);
+  border: 1px solid rgba(190, 186, 176, 0.62);
+  border-radius: 5px;
+  box-shadow: 0 5px 18px rgba(28, 30, 27, 0.07);
+  backdrop-filter: blur(9px);
   font-size: 10px;
+  pointer-events: auto;
 }
 
 .transition-readout strong {
   color: var(--ink);
   font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 12px;
+}
+
+.canvas-frame.is-dark .transport-controls,
+.canvas-frame.is-dark .transition-readout {
+  color: #bfc8c6;
+  background: rgba(23, 31, 34, 0.88);
+  border-color: rgba(87, 103, 107, 0.8);
+}
+
+.canvas-frame.is-dark .transition-readout strong {
+  color: #ffffff;
+}
+
+.canvas-frame.is-dark .transport-controls .icon-button:not(.play-button) {
+  color: #c4cdcb;
+  background: #263136;
+  border-color: #45545a;
 }
 
 .inspector {

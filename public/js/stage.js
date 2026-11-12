@@ -232,8 +232,8 @@ export class StageCanvas {
     if (!this.project) return size;
 
     const horizontalPadding = Math.max(22, Math.min(48, size.width * 0.05));
-    const topPadding = 30;
-    const bottomPadding = 38;
+    const topPadding = 60;
+    const bottomPadding = 66;
     const availableWidth = Math.max(40, size.width - horizontalPadding * 2);
     const availableHeight = Math.max(40, size.height - topPadding - bottomPadding);
     const ratio = this.project.stageWidth / this.project.stageHeight;

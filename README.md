@@ -52,7 +52,7 @@ npm install
 npm start
 ```
 
-開啟 `http://localhost:3000`。開發時可使用：
+開啟 `http://localhost:3030`。開發時可使用：
 
 ```powershell
 npm run dev
