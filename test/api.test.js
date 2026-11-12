@@ -167,6 +167,16 @@ test("project, dancer and formation CRUD workflow", async (t) => {
   assert.equal(pdfBuffer.subarray(0, 5).toString(), "%PDF-");
   assert.ok(pdfBuffer.length > 5000);
 
+  const simplePdfResponse = await fetch(
+    `${baseUrl}/api/projects/${projectId}/export.pdf?theme=dark&mode=simple`
+  );
+  assert.equal(simplePdfResponse.status, 200);
+  assert.match(simplePdfResponse.headers.get("content-type"), /^application\/pdf/);
+  assert.match(simplePdfResponse.headers.get("content-disposition"), /simple\.pdf/);
+  const simplePdfBuffer = Buffer.from(await simplePdfResponse.arrayBuffer());
+  assert.equal(simplePdfBuffer.subarray(0, 5).toString(), "%PDF-");
+  assert.ok(simplePdfBuffer.length < pdfBuffer.length);
+
   const deletedDancer = await request(
     `/api/projects/${projectId}/dancers/${secondDancer.payload.dancer.id}`,
     { method: "DELETE" }

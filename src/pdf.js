@@ -9,6 +9,7 @@ const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 
 async function buildProjectPdf(project, options = {}) {
   const theme = options.theme === "dark" ? "dark" : "light";
+  const mode = options.mode === "simple" ? "simple" : "full";
   const regularFont = findFont([
     process.env.PDF_CJK_FONT,
     path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "Deng.ttf"),
@@ -51,14 +52,48 @@ async function buildProjectPdf(project, options = {}) {
     document.on("error", reject);
   });
 
-  drawCover(document, project);
-  project.formations.forEach((formation, index) => {
-    drawFormation(document, project, formation, index, theme);
-  });
-  drawFooters(document, project);
+  if (mode === "simple") {
+    project.formations.forEach((formation, index) => {
+      drawSimpleFormation(document, project, formation, index, theme);
+    });
+  } else {
+    drawCover(document, project);
+    project.formations.forEach((formation, index) => {
+      drawFormation(document, project, formation, index, theme);
+    });
+    drawFooters(document, project);
+  }
   document.end();
 
   return completed;
+}
+
+function drawSimpleFormation(document, project, formation, index, theme) {
+  if (index > 0) document.addPage();
+  document.rect(0, 0, PAGE_WIDTH, 12).fill("#eb5e35");
+  setFont(document, 8, true)
+    .fillColor("#8a8d89")
+    .text(`FORMATION ${String(index + 1).padStart(2, "0")}`, MARGIN, 46, {
+      characterSpacing: 1.2
+    });
+  setFont(document, 24, true)
+    .fillColor("#171b1f")
+    .text(formation.name, MARGIN, 68, {
+      width: CONTENT_WIDTH,
+      height: 38,
+      ellipsis: true
+    });
+
+  const stage = fitRect(CONTENT_WIDTH, 560, project.stageWidth / project.stageHeight);
+  const stageX = MARGIN + (CONTENT_WIDTH - stage.width) / 2;
+  const stageY = 140;
+  drawStageDiagram(document, project, formation, {
+    x: stageX,
+    y: stageY,
+    width: stage.width,
+    height: stage.height,
+    theme
+  });
 }
 
 function drawCover(document, project) {
@@ -430,7 +465,12 @@ function setFont(document, size, bold = false) {
 }
 
 function findFont(candidates) {
-  return candidates.find((candidate) => candidate && fs.existsSync(candidate)) || null;
+  return candidates.find(
+    (candidate) =>
+      candidate &&
+      /\.(ttf|otf)$/i.test(candidate) &&
+      fs.existsSync(candidate)
+  ) || null;
 }
 
 function fitRect(maxWidth, maxHeight, ratio) {

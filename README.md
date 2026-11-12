@@ -17,7 +17,7 @@
 - 舞台深色模式、網格開關與強化網格
 - `easeInOutCubic` 隊形間平滑走位預覽
 - 拖曳座標即時自動儲存
-- 匯出包含舞者名單、隊形舞台圖與座標明細的 PDF
+- 匯出完整版或簡化版 PDF
 - SQLite 外鍵、唯一性與 JSON 合法性約束
 - 首次啟動自動建立 8 人、3 隊形示範資料
 
@@ -103,7 +103,8 @@ npm start
 | `GET` | `/api/projects` | 專案列表 |
 | `POST` | `/api/projects` | 新增專案與第一個隊形 |
 | `GET` | `/api/projects/:projectId` | 專案、舞者與隊形完整資料 |
-| `GET` | `/api/projects/:projectId/export.pdf` | 匯出完整專案 PDF |
+| `GET` | `/api/projects/:projectId/export.pdf?mode=full` | 匯出完整專案 PDF |
+| `GET` | `/api/projects/:projectId/export.pdf?mode=simple` | 匯出隊形名稱與舞台排位圖 |
 | `PATCH` | `/api/projects/:projectId` | 編輯專案與舞台尺寸 |
 | `DELETE` | `/api/projects/:projectId` | 刪除專案 |
 | `GET` | `/api/projects/:projectId/dancers` | 舞者列表 |

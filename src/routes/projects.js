@@ -55,10 +55,13 @@ function createProjectsRouter(db) {
         return;
       }
 
+      const mode = request.query.mode === "simple" ? "simple" : "full";
       const pdf = await buildProjectPdf(project, {
-        theme: request.query.theme === "dark" ? "dark" : "light"
+        theme: request.query.theme === "dark" ? "dark" : "light",
+        mode
       });
-      const filename = `${sanitizeFilename(project.name)}.pdf`;
+      const suffix = mode === "simple" ? "-simple" : "";
+      const filename = `${sanitizeFilename(project.name)}${suffix}.pdf`;
       response.set({
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="project-${project.id}.pdf"; filename*=UTF-8''${encodeURIComponent(filename)}`,

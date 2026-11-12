@@ -1285,6 +1285,10 @@ svg {
   box-shadow: 0 28px 80px rgba(16, 18, 20, 0.32);
 }
 
+.modal--compact {
+  width: min(430px, calc(100vw - 32px));
+}
+
 .modal::backdrop {
   background: rgba(15, 18, 20, 0.56);
   backdrop-filter: blur(4px);
@@ -1316,6 +1320,73 @@ svg {
   justify-content: flex-end;
   gap: 8px;
   padding-top: 10px;
+}
+
+.export-mode-options {
+  display: grid;
+  gap: 9px;
+}
+
+.export-mode-option {
+  position: relative;
+  display: block;
+  cursor: pointer;
+}
+
+.export-mode-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.export-mode-option > span {
+  display: grid;
+  gap: 4px;
+  padding: 13px 14px 13px 39px;
+  background: #fff;
+  border: 1px solid #d8d4ca;
+  border-radius: 6px;
+  transition: 150ms ease;
+}
+
+.export-mode-option > span::before {
+  position: absolute;
+  top: 17px;
+  left: 15px;
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid #a8aaa5;
+  border-radius: 50%;
+  content: "";
+}
+
+.export-mode-option input:checked + span {
+  background: #fff8f4;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(235, 94, 53, 0.09);
+}
+
+.export-mode-option input:checked + span::before {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 3px #fff8f4;
+}
+
+.export-mode-option input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.export-mode-option strong {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.export-mode-option small {
+  color: #7d817b;
+  font-size: 10px;
 }
 
 .ratio-fields {
@@ -1529,19 +1600,20 @@ svg {
     padding: 0 14px;
   }
 
-  .save-state,
-  #editProjectButton {
+  .save-state {
     display: none;
   }
 
-  .export-button {
+  .export-button,
+  #editProjectButton {
     display: inline-grid;
     width: 34px;
     min-height: 34px;
     padding: 0;
   }
 
-  .export-button span {
+  .export-button span,
+  #editProjectButton span {
     display: none;
   }
 

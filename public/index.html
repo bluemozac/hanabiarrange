@@ -125,9 +125,9 @@
               <svg><use href="#icon-download"></use></svg>
               <span>匯出 PDF</span>
             </button>
-            <button class="text-button" id="editProjectButton" type="button">
+            <button class="text-button" id="editProjectButton" type="button" title="舞台設定" aria-label="舞台設定">
               <svg><use href="#icon-settings"></use></svg>
-              舞台設定
+              <span>舞台設定</span>
             </button>
             <button class="icon-button icon-button--danger" id="deleteProjectButton" type="button" title="刪除專案" aria-label="刪除專案">
               <svg><use href="#icon-trash"></use></svg>
@@ -385,6 +385,40 @@
         <div class="modal-actions">
           <button class="ghost-button" type="button" data-close-dialog="dancerDialog">取消</button>
           <button class="primary-button" type="submit">新增舞者</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal modal--compact" id="exportDialog">
+      <form id="exportForm" class="modal-form">
+        <div class="modal-header">
+          <div>
+            <p class="panel-label">PDF EXPORT</p>
+            <h2>匯出 PDF</h2>
+          </div>
+          <button class="icon-button modal-close" type="button" data-close-dialog="exportDialog" title="關閉" aria-label="關閉">
+            <svg><use href="#icon-x"></use></svg>
+          </button>
+        </div>
+        <div class="export-mode-options">
+          <label class="export-mode-option">
+            <input type="radio" name="exportMode" value="full" checked />
+            <span>
+              <strong>完整版</strong>
+              <small>專案摘要、隊形舞台圖與舞者座標</small>
+            </span>
+          </label>
+          <label class="export-mode-option">
+            <input type="radio" name="exportMode" value="simple" />
+            <span>
+              <strong>簡化版</strong>
+              <small>只保留隊形名稱與舞台排位圖</small>
+            </span>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="ghost-button" type="button" data-close-dialog="exportDialog">取消</button>
+          <button class="primary-button" type="submit">產生 PDF</button>
         </div>
       </form>
     </dialog>

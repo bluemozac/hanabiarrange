@@ -70,6 +70,8 @@ const elements = {
   newDancerName: $("#newDancerName"),
   newDancerColor: $("#newDancerColor"),
   exportPdfButton: $("#exportPdfButton"),
+  exportDialog: $("#exportDialog"),
+  exportForm: $("#exportForm"),
   toastRegion: $("#toastRegion"),
   loadingScreen: $("#loadingScreen")
 };
@@ -142,7 +144,8 @@ function bindEvents() {
   $("#deleteProjectButton").addEventListener("click", deleteProject);
   $("#newDancerButton").addEventListener("click", openDancerDialog);
   $("#newFormationButton").addEventListener("click", createFormationFromCurrent);
-  elements.exportPdfButton.addEventListener("click", exportProjectPdf);
+  elements.exportPdfButton.addEventListener("click", openExportDialog);
+  elements.exportForm.addEventListener("submit", submitExportForm);
   elements.stageThemeButton.addEventListener("click", toggleStageTheme);
   elements.stageGridButton.addEventListener("click", toggleStageGrid);
   elements.stageResizeHandle.addEventListener("pointerdown", beginStageResize);
@@ -1162,33 +1165,80 @@ function resetStageSize() {
   showToast("舞台顯示大小已重設");
 }
 
-async function exportProjectPdf() {
+function openExportDialog() {
+  if (!state.project) return;
+  elements.exportDialog.showModal();
+}
+
+function submitExportForm(event) {
+  event.preventDefault();
+  const formData = new FormData(elements.exportForm);
+  const mode = formData.get("exportMode") === "simple" ? "simple" : "full";
+  elements.exportDialog.close();
+  exportProjectPdf(mode);
+}
+
+async function exportProjectPdf(mode = "full") {
   if (!state.project) return;
   const label = elements.exportPdfButton.querySelector("span");
   const previousLabel = label.textContent;
+  const modeSuffix = mode === "simple" ? "-simple" : "";
+  const exportUrl = `/api/projects/${state.project.id}/export.pdf?theme=${state.stageTheme}&mode=${mode}`;
+  const downloadName = `${sanitizeFilename(state.project.name)}${modeSuffix}.pdf`;
+  if (mobileLayout.matches) {
+    const link = document.createElement("a");
+    link.href = exportUrl;
+    link.download = downloadName;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    showToast("PDF 已開始下載");
+    return;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 120000);
   elements.exportPdfButton.disabled = true;
   label.textContent = "產生中...";
   try {
     const response = await fetch(
-      `/api/projects/${state.project.id}/export.pdf?theme=${state.stageTheme}`
+      exportUrl,
+      {
+        headers: { Accept: "application/pdf" },
+        signal: controller.signal
+      }
     );
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
-      throw new Error(payload.error || "PDF 產生失敗");
+      throw new Error(payload.error || `PDF 產生失敗 (${response.status})`);
     }
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.toLowerCase().includes("application/pdf")) {
+      throw new Error("伺服器回傳的檔案格式不是 PDF");
+    }
+
     const blob = await response.blob();
+    if (blob.size < 5) throw new Error("PDF 檔案內容為空");
+    const signature = new TextDecoder().decode(await blob.slice(0, 5).arrayBuffer());
+    if (signature !== "%PDF-") throw new Error("PDF 檔案格式不完整");
+
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = objectUrl;
-    link.download = `${sanitizeFilename(state.project.name)}.pdf`;
+    link.download = downloadName;
     document.body.append(link);
     link.click();
     link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
     showToast("PDF 已開始下載");
   } catch (error) {
-    showError(error);
+    if (error.name === "AbortError") {
+      showToast("PDF 產生逾時，請稍後再試", true);
+    } else {
+      showError(error);
+    }
   } finally {
+    window.clearTimeout(timeoutId);
     label.textContent = previousLabel || "匯出 PDF";
     elements.exportPdfButton.disabled = false;
   }
