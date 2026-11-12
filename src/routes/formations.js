@@ -5,6 +5,7 @@ const {
   mapDancer,
   mapFormation,
   normalizePositions,
+  normalizeAnnotations,
   touchProject
 } = require("../repository");
 
@@ -55,15 +56,27 @@ function createFormationsRouter(db) {
       project.stage_width,
       project.stage_height
     );
+    const annotations = normalizeAnnotations(
+      request.body?.annotations ?? [],
+      project.stage_width,
+      project.stage_height
+    );
 
     const create = db.transaction(() => {
       const result = db
         .prepare(
           `INSERT INTO formations
-             (project_id, name, sequence_index, transition_seconds, positions_json)
-           VALUES (?, ?, ?, ?, ?)`
+             (project_id, name, sequence_index, transition_seconds, positions_json, annotations_json)
+           VALUES (?, ?, ?, ?, ?, ?)`
         )
-        .run(project.id, name, nextIndex, transitionSeconds, JSON.stringify(positions));
+        .run(
+          project.id,
+          name,
+          nextIndex,
+          transitionSeconds,
+          JSON.stringify(positions),
+          JSON.stringify(annotations)
+        );
       touchProject(db, project.id);
       return Number(result.lastInsertRowid);
     });
@@ -142,12 +155,27 @@ function createFormationsRouter(db) {
         positions
       );
     }
+    const annotations =
+      request.body?.annotations === undefined
+        ? JSON.parse(current.annotations_json || "[]")
+        : normalizeAnnotations(
+            request.body.annotations,
+            project.stage_width,
+            project.stage_height
+          );
 
     db.prepare(
       `UPDATE formations
-       SET name = ?, transition_seconds = ?, positions_json = ?, updated_at = CURRENT_TIMESTAMP
+       SET name = ?, transition_seconds = ?, positions_json = ?, annotations_json = ?,
+           updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`
-    ).run(name, transitionSeconds, JSON.stringify(positions), formationId);
+    ).run(
+      name,
+      transitionSeconds,
+      JSON.stringify(positions),
+      JSON.stringify(annotations),
+      formationId
+    );
     touchProject(db, project.id);
 
     response.json({

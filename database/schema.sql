@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS formations (
   sequence_index INTEGER NOT NULL,
   transition_seconds REAL NOT NULL DEFAULT 2 CHECK (transition_seconds BETWEEN 0 AND 60),
   positions_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(positions_json)),
+  annotations_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(annotations_json)),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,

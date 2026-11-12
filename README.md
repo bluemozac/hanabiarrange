@@ -10,6 +10,7 @@
 - 多隊形時間軸與進場過渡秒數
 - 時間軸隊形可透過拖曳把手調整演出順序
 - Canvas 滑鼠／觸控拖曳，觸控空白區可平移舞台
+- 每個隊形可加入、編輯、刪除及拖曳文字注解
 - 舞台顯示尺寸可拖曳調整，超出自動顯示雙向捲軸
 - 時間軸固定在視窗底部
 - 手機版保留可橫向滑動的舞者列
@@ -44,6 +45,7 @@ hanabiarr/
 │  ├─ repository.js       # 共用查詢與座標正規化
 │  ├─ pdf.js              # PDF 版面與舞台圖輸出
 │  └─ server.js           # 啟動入口
+├─ assets/fonts/           # PDF 內建 Noto Sans TC 字型與 OFL 授權
 ├─ test/
 │  └─ api.test.js         # Node test API 整合測試
 └─ package.json

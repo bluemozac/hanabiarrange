@@ -9,11 +9,18 @@ export class StageCanvas {
     this.dancers = [];
     this.formation = null;
     this.displayPositions = {};
+    this.annotations = [];
+    this.annotationLayouts = [];
     this.selectedDancerId = null;
+    this.selectedAnnotationId = null;
     this.draggingDancerId = null;
+    this.draggingAnnotationId = null;
+    this.annotationDragState = null;
     this.panning = null;
+    this.textPlacementMode = false;
     this.activePointerType = "mouse";
     this.hoveredDancerId = null;
+    this.hoveredAnnotationId = null;
     this.animation = null;
     this.animationFrame = null;
     this.layout = null;
@@ -30,9 +37,10 @@ export class StageCanvas {
     canvas.addEventListener("contextmenu", (event) => event.preventDefault());
     canvas.addEventListener("dragstart", (event) => event.preventDefault());
     canvas.addEventListener("pointerleave", () => {
-      if (!this.draggingDancerId && !this.panning) {
+      if (!this.draggingDancerId && !this.draggingAnnotationId && !this.panning) {
         this.hoveredDancerId = null;
-        this.canvas.style.cursor = "default";
+        this.hoveredAnnotationId = null;
+        this.canvas.style.cursor = this.textPlacementMode ? "text" : "default";
         this.draw();
       }
     });
@@ -48,6 +56,10 @@ export class StageCanvas {
     this.cancelAnimation();
     this.formation = formation;
     this.displayPositions = clonePositions(formation?.positions ?? {});
+    this.annotations = cloneAnnotations(formation?.annotations ?? []);
+    if (!this.annotations.some((annotation) => annotation.id === this.selectedAnnotationId)) {
+      this.selectedAnnotationId = null;
+    }
     this.draw();
   }
 
@@ -59,6 +71,24 @@ export class StageCanvas {
 
   setSelectedDancer(dancerId) {
     this.selectedDancerId = dancerId;
+    this.draw();
+  }
+
+  setSelectedAnnotation(annotationId) {
+    this.selectedAnnotationId = annotationId;
+    this.draw();
+  }
+
+  setTextPlacementMode(active) {
+    this.textPlacementMode = Boolean(active);
+    this.canvas.style.cursor = this.textPlacementMode ? "text" : "default";
+  }
+
+  updateAnnotationPosition(annotationId, position) {
+    const annotation = this.annotations.find((item) => item.id === annotationId);
+    if (!annotation) return;
+    annotation.x = position.x;
+    annotation.y = position.y;
     this.draw();
   }
 
@@ -125,9 +155,39 @@ export class StageCanvas {
     if (this.animation || !this.project) return;
     this.activePointerType = event.pointerType || "mouse";
     const point = this.eventToStage(event);
+    if (this.textPlacementMode) {
+      event.preventDefault();
+      this.textPlacementMode = false;
+      this.canvas.style.cursor = "default";
+      this.callbacks.onAnnotationPlace?.({
+        x: round(Math.min(this.project.stageWidth, Math.max(0, point.x))),
+        y: round(Math.min(this.project.stageHeight, Math.max(0, point.y)))
+      });
+      return;
+    }
+
     const hit = this.findDancerAt(point.x, point.y);
     if (!hit) {
       this.callbacks.onSelect?.(null);
+      const annotation = this.findAnnotationAt(point.x, point.y);
+      if (annotation) {
+        event.preventDefault();
+        this.selectedDancerId = null;
+        this.selectedAnnotationId = annotation.id;
+        this.draggingAnnotationId = annotation.id;
+        this.annotationDragState = {
+          pointerId: event.pointerId,
+          lastX: event.clientX,
+          lastY: event.clientY,
+          moved: false
+        };
+        this.canvas.setPointerCapture(event.pointerId);
+        this.canvas.style.cursor = "grabbing";
+        this.draw();
+        return;
+      }
+
+      this.selectedAnnotationId = null;
       if (event.pointerType === "touch") {
         event.preventDefault();
         this.panning = {
@@ -143,6 +203,7 @@ export class StageCanvas {
     }
 
     event.preventDefault();
+    this.selectedAnnotationId = null;
     this.draggingDancerId = hit.id;
     this.selectedDancerId = hit.id;
     this.canvas.setPointerCapture(event.pointerId);
@@ -152,6 +213,10 @@ export class StageCanvas {
 
   handlePointerMove(event) {
     if (this.animation || !this.project) return;
+    if (this.textPlacementMode) {
+      this.canvas.style.cursor = "text";
+      return;
+    }
 
     if (this.panning && this.panning.pointerId === event.pointerId) {
       event.preventDefault();
@@ -164,6 +229,36 @@ export class StageCanvas {
     }
 
     const point = this.eventToStage(event);
+
+    if (this.draggingAnnotationId && this.annotationDragState) {
+      event.preventDefault();
+      const annotation = this.annotations.find(
+        (item) => item.id === this.draggingAnnotationId
+      );
+      if (!annotation) return;
+      const deltaX =
+        ((event.clientX - this.annotationDragState.lastX) / this.layout.width) *
+        this.project.stageWidth;
+      const deltaY =
+        ((event.clientY - this.annotationDragState.lastY) / this.layout.height) *
+        this.project.stageHeight;
+      this.annotationDragState.lastX = event.clientX;
+      this.annotationDragState.lastY = event.clientY;
+      this.annotationDragState.moved =
+        this.annotationDragState.moved || Math.abs(deltaX) + Math.abs(deltaY) > 0.15;
+      annotation.x = round(
+        Math.min(this.project.stageWidth, Math.max(0, annotation.x + deltaX))
+      );
+      annotation.y = round(
+        Math.min(this.project.stageHeight, Math.max(0, annotation.y + deltaY))
+      );
+      this.callbacks.onAnnotationPositionChange?.(annotation.id, {
+        x: annotation.x,
+        y: annotation.y
+      });
+      this.draw();
+      return;
+    }
 
     if (this.draggingDancerId) {
       event.preventDefault();
@@ -178,15 +273,49 @@ export class StageCanvas {
     }
 
     const hit = this.findDancerAt(point.x, point.y, event.pointerType);
+    const annotation = hit ? null : this.findAnnotationAt(point.x, point.y);
     const hoveredId = hit?.id ?? null;
-    if (hoveredId !== this.hoveredDancerId) {
+    const hoveredAnnotationId = annotation?.id ?? null;
+    if (
+      hoveredId !== this.hoveredDancerId ||
+      hoveredAnnotationId !== this.hoveredAnnotationId
+    ) {
       this.hoveredDancerId = hoveredId;
-      this.canvas.style.cursor = hoveredId ? "grab" : "default";
+      this.hoveredAnnotationId = hoveredAnnotationId;
+      this.canvas.style.cursor = hoveredId
+        ? "grab"
+        : hoveredAnnotationId
+          ? "move"
+          : "default";
       this.draw();
     }
   }
 
   handlePointerUp(event) {
+    if (
+      this.draggingAnnotationId &&
+      this.annotationDragState?.pointerId === event.pointerId
+    ) {
+      const annotationId = this.draggingAnnotationId;
+      const dragState = this.annotationDragState;
+      this.draggingAnnotationId = null;
+      this.annotationDragState = null;
+      this.canvas.style.cursor = this.hoveredAnnotationId ? "move" : "default";
+      if (this.canvas.hasPointerCapture(event.pointerId)) {
+        this.canvas.releasePointerCapture(event.pointerId);
+      }
+      const annotation = this.annotations.find((item) => item.id === annotationId);
+      if (dragState.moved && annotation) {
+        this.callbacks.onAnnotationPositionCommit?.(annotation.id, {
+          x: annotation.x,
+          y: annotation.y
+        });
+      } else {
+        this.callbacks.onAnnotationClick?.(annotationId);
+      }
+      return;
+    }
+
     if (this.panning && this.panning.pointerId === event.pointerId) {
       this.panning = null;
       this.canvas.style.cursor = this.hoveredDancerId ? "grab" : "default";
@@ -237,6 +366,23 @@ export class StageCanvas {
       }
     }
     return closest;
+  }
+
+  findAnnotationAt(x, y) {
+    if (!this.layout) return null;
+    const screen = this.stageToScreen(x, y);
+    for (let index = this.annotationLayouts.length - 1; index >= 0; index -= 1) {
+      const layout = this.annotationLayouts[index];
+      if (
+        screen.x >= layout.left &&
+        screen.x <= layout.left + layout.width &&
+        screen.y >= layout.top &&
+        screen.y <= layout.top + layout.height
+      ) {
+        return layout.annotation;
+      }
+    }
+    return null;
   }
 
   dancerRadius() {
@@ -297,8 +443,68 @@ export class StageCanvas {
     if (!this.project || !this.layout) return;
 
     this.drawFloor();
+    this.drawAnnotations();
     this.drawTransition();
     this.drawDancers();
+  }
+
+  drawAnnotations() {
+    this.annotationLayouts = [];
+    const context = this.context;
+    const maxWidth = Math.max(90, Math.min(190, this.layout.width * 0.34));
+
+    for (const annotation of this.annotations) {
+      const fontSize = annotation.fontSize ?? 14;
+      const lineHeight = fontSize * 1.3;
+      context.save();
+      context.font = `700 ${fontSize}px "Aptos", "Segoe UI", "Noto Sans TC", sans-serif`;
+      const lines = wrapCanvasText(context, annotation.text, maxWidth, 5);
+      const measuredWidth = Math.min(
+        maxWidth,
+        Math.max(...lines.map((line) => context.measureText(line).width), 24)
+      );
+      const width = measuredWidth + 18;
+      const height = lines.length * lineHeight + 12;
+      const point = this.stageToScreen(annotation.x, annotation.y);
+      const left = Math.min(
+        this.layout.x + this.layout.width - width - 5,
+        Math.max(this.layout.x + 5, point.x - width / 2)
+      );
+      const top = Math.min(
+        this.layout.y + this.layout.height - height - 5,
+        Math.max(this.layout.y + 5, point.y - height / 2)
+      );
+      const selected = annotation.id === this.selectedAnnotationId;
+      const hovered = annotation.id === this.hoveredAnnotationId;
+
+      context.shadowColor = "rgba(16, 20, 18, 0.24)";
+      context.shadowBlur = selected || hovered ? 14 : 9;
+      context.shadowOffsetY = 3;
+      context.fillStyle = hexToRgba(annotation.color, 0.94);
+      roundedRect(context, left, top, width, height, 5);
+      context.fill();
+      context.shadowColor = "transparent";
+      context.lineWidth = selected ? 2.5 : 1.25;
+      context.strokeStyle = selected ? "#ffffff" : "rgba(255, 255, 255, 0.72)";
+      roundedRect(context, left, top, width, height, 5);
+      context.stroke();
+
+      context.fillStyle = contrastColor(annotation.color);
+      context.textAlign = "left";
+      context.textBaseline = "top";
+      lines.forEach((line, index) => {
+        context.fillText(line, left + 9, top + 7 + index * lineHeight);
+      });
+      context.restore();
+
+      this.annotationLayouts.push({
+        annotation,
+        left,
+        top,
+        width,
+        height
+      });
+    }
   }
 
   drawFloor() {
@@ -509,6 +715,42 @@ function clonePositions(positions) {
       { x: Number(position.x), y: Number(position.y) }
     ])
   );
+}
+
+function cloneAnnotations(annotations) {
+  return (annotations ?? []).map((annotation) => ({ ...annotation }));
+}
+
+function wrapCanvasText(context, text, maxWidth, maxLines) {
+  const lines = [];
+  const paragraphs = String(text).replaceAll("\r", "").split("\n");
+
+  for (const paragraph of paragraphs) {
+    if (paragraph.length === 0) {
+      lines.push("");
+      continue;
+    }
+    let current = "";
+    for (const character of Array.from(paragraph)) {
+      const candidate = current + character;
+      if (current && context.measureText(candidate).width > maxWidth) {
+        lines.push(current);
+        current = character;
+      } else {
+        current = candidate;
+      }
+    }
+    if (current) lines.push(current);
+  }
+
+  if (lines.length <= maxLines) return lines.length ? lines : [""];
+  const visible = lines.slice(0, maxLines);
+  let last = visible[maxLines - 1];
+  while (last.length > 1 && context.measureText(`${last}…`).width > maxWidth) {
+    last = last.slice(0, -1);
+  }
+  visible[maxLines - 1] = `${last}…`;
+  return visible;
 }
 
 function easeInOutCubic(value) {

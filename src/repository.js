@@ -1,4 +1,5 @@
-const { ApiError, isPlainObject, notFound } = require("./http");
+const { randomUUID } = require("node:crypto");
+const { ApiError, isPlainObject, notFound, colorHex } = require("./http");
 
 function mapProjectSummary(row) {
   return {
@@ -33,9 +34,58 @@ function mapFormation(row) {
     sequenceIndex: row.sequence_index,
     transitionSeconds: row.transition_seconds,
     positions: JSON.parse(row.positions_json),
+    annotations: JSON.parse(row.annotations_json || "[]"),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
+}
+
+function normalizeAnnotations(input, stageWidth, stageHeight) {
+  if (!Array.isArray(input)) {
+    throw new ApiError(400, "annotations 必須是文字注解陣列");
+  }
+  if (input.length > 100) {
+    throw new ApiError(400, "每個隊形最多可有 100 個文字注解");
+  }
+
+  const ids = new Set();
+  return input.map((annotation) => {
+    if (!isPlainObject(annotation)) {
+      throw new ApiError(400, "文字注解格式不正確");
+    }
+    const text = typeof annotation.text === "string" ? annotation.text.trim() : "";
+    if (!text || text.length > 240) {
+      throw new ApiError(400, "文字注解必須介於 1 與 240 個字元");
+    }
+
+    const id =
+      typeof annotation.id === "string" && annotation.id.trim()
+        ? annotation.id.trim().slice(0, 80)
+        : randomUUID();
+    if (ids.has(id)) {
+      throw new ApiError(400, "文字注解 ID 不可重複");
+    }
+    ids.add(id);
+
+    const x = Number(annotation.x);
+    const y = Number(annotation.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      throw new ApiError(400, "文字注解座標格式不正確");
+    }
+    const fontSize = Number(annotation.fontSize ?? 14);
+    if (!Number.isFinite(fontSize) || fontSize < 10 || fontSize > 32) {
+      throw new ApiError(400, "文字注解字級必須介於 10 與 32");
+    }
+
+    return {
+      id,
+      text,
+      x: roundCoordinate(Math.min(stageWidth, Math.max(0, x))),
+      y: roundCoordinate(Math.min(stageHeight, Math.max(0, y))),
+      color: colorHex(annotation.color ?? "#eb5e35"),
+      fontSize: Math.round(fontSize)
+    };
+  });
 }
 
 function getProjectRow(db, projectId) {
@@ -169,5 +219,6 @@ module.exports = {
   listProjects,
   defaultPositions,
   normalizePositions,
+  normalizeAnnotations,
   touchProject
 };

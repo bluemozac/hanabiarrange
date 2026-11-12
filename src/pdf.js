@@ -367,6 +367,8 @@ function drawStageDiagram(document, project, formation, frame) {
       characterSpacing: 0.5
     });
 
+  drawPdfAnnotations(document, project, formation, frame);
+
   const radius = Math.max(6, Math.min(14, Math.min(frame.width, frame.height) / 24));
   for (const dancer of project.dancers) {
     const position = formation.positions[String(dancer.id)];
@@ -393,6 +395,53 @@ function drawStageDiagram(document, project, formation, frame) {
         align: "center",
         lineBreak: false
       });
+  }
+}
+
+function drawPdfAnnotations(document, project, formation, frame) {
+  const maxWidth = Math.min(150, frame.width * 0.34);
+  for (const annotation of formation.annotations ?? []) {
+    const fontSize = Math.max(8, Math.min(16, annotation.fontSize ?? 14));
+    setFont(document, fontSize, true);
+    const lines = wrapPdfText(document, annotation.text, maxWidth, 5);
+    const measuredWidth = Math.min(
+      maxWidth,
+      Math.max(...lines.map((line) => document.widthOfString(line)), 24)
+    );
+    const width = measuredWidth + 14;
+    const lineHeight = fontSize * 1.28;
+    const height = lines.length * lineHeight + 10;
+    const pointX = frame.x + (annotation.x / project.stageWidth) * frame.width;
+    const pointY = frame.y + (annotation.y / project.stageHeight) * frame.height;
+    const left = Math.min(
+      frame.x + frame.width - width - 4,
+      Math.max(frame.x + 4, pointX - width / 2)
+    );
+    const top = Math.min(
+      frame.y + frame.height - height - 4,
+      Math.max(frame.y + 4, pointY - height / 2)
+    );
+
+    document.save();
+    document
+      .roundedRect(left, top, width, height, 4)
+      .fillOpacity(0.94)
+      .fill(safeColor(annotation.color))
+      .fillOpacity(1)
+      .lineWidth(0.8)
+      .strokeColor("#ffffff")
+      .stroke();
+    document.restore();
+
+    setFont(document, fontSize, true).fillColor(contrastColor(annotation.color));
+    lines.forEach((line, index) => {
+      document.text(line, left + 7, top + 5 + index * lineHeight, {
+        width: width - 14,
+        height: lineHeight,
+        lineBreak: false,
+        ellipsis: true
+      });
+    });
   }
 }
 
@@ -557,6 +606,37 @@ function formatNumber(value) {
 function truncate(value, length) {
   const text = String(value);
   return text.length > length ? `${text.slice(0, length - 1)}…` : text;
+}
+
+function wrapPdfText(document, text, maxWidth, maxLines) {
+  const lines = [];
+  const paragraphs = String(text).replaceAll("\r", "").split("\n");
+  for (const paragraph of paragraphs) {
+    if (paragraph.length === 0) {
+      lines.push("");
+      continue;
+    }
+    let current = "";
+    for (const character of Array.from(paragraph)) {
+      const candidate = current + character;
+      if (current && document.widthOfString(candidate) > maxWidth) {
+        lines.push(current);
+        current = character;
+      } else {
+        current = candidate;
+      }
+    }
+    if (current) lines.push(current);
+  }
+
+  if (lines.length <= maxLines) return lines.length ? lines : [""];
+  const visible = lines.slice(0, maxLines);
+  let last = visible[maxLines - 1];
+  while (last.length > 1 && document.widthOfString(`${last}…`) > maxWidth) {
+    last = last.slice(0, -1);
+  }
+  visible[maxLines - 1] = `${last}…`;
+  return visible;
 }
 
 function getPdfFontStatus() {

@@ -80,11 +80,31 @@ test("project, dancer and formation CRUD workflow", async (t) => {
       positions: {
         [firstDancer.payload.dancer.id]: { x: 20, y: 30 },
         [secondDancer.payload.dancer.id]: { x: 80, y: 30 }
-      }
+      },
+      annotations: [
+        {
+          id: "note-1",
+          text: "Hold",
+          x: 50,
+          y: 10,
+          color: "#f97316",
+          fontSize: 16
+        }
+      ]
     })
   });
   assert.equal(newFormation.response.status, 201);
   assert.equal(newFormation.payload.formation.transitionSeconds, 3.5);
+  assert.deepEqual(newFormation.payload.formation.annotations, [
+    {
+      id: "note-1",
+      text: "Hold",
+      x: 50,
+      y: 10,
+      color: "#f97316",
+      fontSize: 16
+    }
+  ]);
 
   const formationId = newFormation.payload.formation.id;
   const updatedFormation = await request(
@@ -122,6 +142,36 @@ test("project, dancer and formation CRUD workflow", async (t) => {
     x: 24.75,
     y: 21.55
   });
+
+  const updatedAnnotations = await request(
+    `/api/projects/${projectId}/formations/${formationId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        annotations: [
+          {
+            id: "note-2",
+            text: "第二拍轉身",
+            x: 50,
+            y: 8,
+            color: "#0ea5e9",
+            fontSize: 18
+          }
+        ]
+      })
+    }
+  );
+  assert.equal(updatedAnnotations.response.status, 200);
+  assert.deepEqual(updatedAnnotations.payload.formation.annotations, [
+    {
+      id: "note-2",
+      text: "第二拍轉身",
+      x: 50,
+      y: 8,
+      color: "#0ea5e9",
+      fontSize: 18
+    }
+  ]);
 
   const thirdFormation = await request(`/api/projects/${projectId}/formations`, {
     method: "POST",

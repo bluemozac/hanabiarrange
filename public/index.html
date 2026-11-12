@@ -68,6 +68,9 @@
         <circle cx="9" cy="19" r="1" />
         <circle cx="15" cy="19" r="1" />
       </symbol>
+      <symbol id="icon-text" viewBox="0 0 24 24">
+        <path d="M4 7V4h16v3M9 20h6M12 4v16" />
+      </symbol>
     </svg>
 
     <div class="app-shell">
@@ -143,6 +146,9 @@
                 <h2 id="stageFormationName">尚未選擇隊形</h2>
               </div>
               <div class="stage-toolbar-controls">
+                <button class="icon-button view-toggle" id="addTextButton" type="button" title="加入文字注解" aria-label="加入文字注解" aria-pressed="false">
+                  <svg><use href="#icon-text"></use></svg>
+                </button>
                 <button class="icon-button view-toggle" id="stageGridButton" type="button" title="顯示網格" aria-label="顯示網格" aria-pressed="true">
                   <svg><use href="#icon-grid"></use></svg>
                 </button>
@@ -419,6 +425,48 @@
         <div class="modal-actions">
           <button class="ghost-button" type="button" data-close-dialog="exportDialog">取消</button>
           <button class="primary-button" type="submit">產生 PDF</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal modal--compact" id="annotationDialog">
+      <form id="annotationForm" class="modal-form">
+        <div class="modal-header">
+          <div>
+            <p class="panel-label">STAGE NOTE</p>
+            <h2 id="annotationDialogTitle">新增文字注解</h2>
+          </div>
+          <button class="icon-button modal-close" type="button" data-close-dialog="annotationDialog" title="關閉" aria-label="關閉">
+            <svg><use href="#icon-x"></use></svg>
+          </button>
+        </div>
+        <input id="annotationIdInput" type="hidden" />
+        <input id="annotationXInput" type="hidden" />
+        <input id="annotationYInput" type="hidden" />
+        <label class="field">
+          <span>注解文字</span>
+          <textarea id="annotationTextInput" rows="4" maxlength="240" placeholder="例如：第二拍轉身、保持間距" required></textarea>
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>文字顏色</span>
+            <input id="annotationColorInput" class="color-input" type="color" value="#eb5e35" />
+          </label>
+          <label class="field">
+            <span>字級</span>
+            <select id="annotationFontSizeInput">
+              <option value="12">小字 12</option>
+              <option value="14" selected>標準 14</option>
+              <option value="18">大字 18</option>
+              <option value="22">標題 22</option>
+            </select>
+          </label>
+        </div>
+        <div class="modal-actions annotation-actions">
+          <button class="danger-text-button" id="deleteAnnotationButton" type="button" hidden>刪除注解</button>
+          <span class="modal-action-spacer"></span>
+          <button class="ghost-button" type="button" data-close-dialog="annotationDialog">取消</button>
+          <button class="primary-button" type="submit">套用注解</button>
         </div>
       </form>
     </dialog>

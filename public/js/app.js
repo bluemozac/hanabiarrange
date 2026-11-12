@@ -21,6 +21,7 @@ const elements = {
   stagePanel: $("#stagePanel"),
   stageCanvas: $("#stageCanvas"),
   canvasFrame: $("#canvasFrame"),
+  addTextButton: $("#addTextButton"),
   stageGridButton: $("#stageGridButton"),
   stageThemeButton: $("#stageThemeButton"),
   stageThemeIcon: $("#stageThemeIcon"),
@@ -72,6 +73,16 @@ const elements = {
   exportPdfButton: $("#exportPdfButton"),
   exportDialog: $("#exportDialog"),
   exportForm: $("#exportForm"),
+  annotationDialog: $("#annotationDialog"),
+  annotationForm: $("#annotationForm"),
+  annotationDialogTitle: $("#annotationDialogTitle"),
+  annotationIdInput: $("#annotationIdInput"),
+  annotationXInput: $("#annotationXInput"),
+  annotationYInput: $("#annotationYInput"),
+  annotationTextInput: $("#annotationTextInput"),
+  annotationColorInput: $("#annotationColorInput"),
+  annotationFontSizeInput: $("#annotationFontSizeInput"),
+  deleteAnnotationButton: $("#deleteAnnotationButton"),
   toastRegion: $("#toastRegion"),
   loadingScreen: $("#loadingScreen")
 };
@@ -81,6 +92,7 @@ const state = {
   project: null,
   selectedFormationId: null,
   selectedDancerId: null,
+  selectedAnnotationId: null,
   isPlaying: false,
   stageTheme: readPreference(STAGE_THEME_KEY, "light"),
   gridVisible: readPreference(STAGE_GRID_KEY, "true") !== "false"
@@ -90,11 +102,18 @@ let formationSaveTimer = null;
 let pendingFormationSaveId = null;
 let stageResizeState = null;
 let formationDragState = null;
+let annotationSaveTimer = null;
 
 const stage = new StageCanvas(elements.stageCanvas, {
   onSelect: (dancerId) => selectDancer(dancerId),
   onPositionChange: (dancerId, position) => handlePositionChange(dancerId, position),
   onPositionCommit: (dancerId, position) => saveDancerPosition(dancerId, position),
+  onAnnotationPlace: (position) => openNewAnnotationDialog(position),
+  onAnnotationClick: (annotationId) => openAnnotationEditor(annotationId),
+  onAnnotationPositionChange: (annotationId, position) =>
+    handleAnnotationPositionChange(annotationId, position),
+  onAnnotationPositionCommit: (annotationId, position) =>
+    handleAnnotationPositionCommit(annotationId, position),
   onPan: (deltaX, deltaY) => panStage(deltaX, deltaY),
   onPanStart: () => elements.canvasStageArea.classList.add("is-panning"),
   onPanEnd: () => elements.canvasStageArea.classList.remove("is-panning"),
@@ -146,6 +165,9 @@ function bindEvents() {
   $("#newFormationButton").addEventListener("click", createFormationFromCurrent);
   elements.exportPdfButton.addEventListener("click", openExportDialog);
   elements.exportForm.addEventListener("submit", submitExportForm);
+  elements.addTextButton.addEventListener("click", toggleAnnotationPlacement);
+  elements.annotationForm.addEventListener("submit", submitAnnotationForm);
+  elements.deleteAnnotationButton.addEventListener("click", deleteSelectedAnnotation);
   elements.stageThemeButton.addEventListener("click", toggleStageTheme);
   elements.stageGridButton.addEventListener("click", toggleStageGrid);
   elements.stageResizeHandle.addEventListener("pointerdown", beginStageResize);
@@ -221,10 +243,13 @@ async function loadProject(projectId, preferredFormationId = null, preferredDanc
       null;
     state.selectedDancerId =
       state.project.dancers.find((dancer) => dancer.id === preferredDancerId)?.id ?? null;
+    state.selectedAnnotationId = null;
     state.isPlaying = false;
+    setAnnotationPlacement(false);
     renderAll();
     stage.setProject(state.project);
     stage.setSelectedDancer(state.selectedDancerId);
+    stage.setSelectedAnnotation(null);
     stage.setFormation(selectedFormation());
     setSaveState("saved", "已同步");
   } catch (error) {
@@ -434,6 +459,8 @@ function updateEmptyState() {
 
 function selectDancer(dancerId) {
   if (state.isPlaying) return;
+  state.selectedAnnotationId = null;
+  stage.setSelectedAnnotation(null);
   state.selectedDancerId =
     state.project?.dancers.some((dancer) => dancer.id === dancerId) ? dancerId : null;
   if (dancerId && mobileLayout.matches) {
@@ -445,14 +472,178 @@ function selectDancer(dancerId) {
   renderDancerInspector();
 }
 
+function toggleAnnotationPlacement() {
+  const formation = selectedFormation();
+  if (!formation) {
+    showToast("請先選擇一個隊形");
+    return;
+  }
+  const active = !elements.addTextButton.classList.contains("is-active");
+  setAnnotationPlacement(active);
+  if (active) {
+    state.selectedAnnotationId = null;
+    stage.setSelectedAnnotation(null);
+    showToast("點擊舞台放置文字注解");
+  }
+}
+
+function setAnnotationPlacement(active) {
+  stage.setTextPlacementMode(active);
+  elements.addTextButton.classList.toggle("is-active", active);
+  elements.addTextButton.setAttribute("aria-pressed", String(active));
+}
+
+function openNewAnnotationDialog(position) {
+  const formation = selectedFormation();
+  if (!formation) return;
+  setAnnotationPlacement(false);
+  elements.annotationForm.reset();
+  elements.annotationIdInput.value = "";
+  elements.annotationXInput.value = position.x;
+  elements.annotationYInput.value = position.y;
+  elements.annotationDialogTitle.textContent = "新增文字注解";
+  elements.annotationColorInput.value = "#eb5e35";
+  elements.annotationFontSizeInput.value = "14";
+  elements.deleteAnnotationButton.hidden = true;
+  elements.annotationDialog.showModal();
+  elements.annotationTextInput.focus();
+}
+
+function openAnnotationEditor(annotationId) {
+  const formation = selectedFormation();
+  const annotation = formation?.annotations.find((item) => item.id === annotationId);
+  if (!annotation) return;
+  setAnnotationPlacement(false);
+  state.selectedAnnotationId = annotation.id;
+  stage.setSelectedAnnotation(annotation.id);
+  elements.annotationForm.reset();
+  elements.annotationIdInput.value = annotation.id;
+  elements.annotationXInput.value = annotation.x;
+  elements.annotationYInput.value = annotation.y;
+  elements.annotationTextInput.value = annotation.text;
+  elements.annotationColorInput.value = safeColor(annotation.color);
+  elements.annotationFontSizeInput.value = String(annotation.fontSize);
+  elements.annotationDialogTitle.textContent = "編輯文字注解";
+  elements.deleteAnnotationButton.hidden = false;
+  elements.annotationDialog.showModal();
+  elements.annotationTextInput.focus();
+}
+
+function submitAnnotationForm(event) {
+  event.preventDefault();
+  const formation = selectedFormation();
+  if (!formation) return;
+  const text = elements.annotationTextInput.value.trim();
+  if (!text) {
+    showToast("請輸入注解文字", true);
+    return;
+  }
+
+  const annotationId = elements.annotationIdInput.value;
+  let annotation = formation.annotations.find((item) => item.id === annotationId);
+  if (!annotation) {
+    annotation = {
+      id: createAnnotationId(),
+      x: Number(elements.annotationXInput.value),
+      y: Number(elements.annotationYInput.value)
+    };
+    formation.annotations.push(annotation);
+  }
+  annotation.text = text;
+  annotation.color = elements.annotationColorInput.value;
+  annotation.fontSize = Number(elements.annotationFontSizeInput.value);
+
+  state.selectedAnnotationId = annotation.id;
+  stage.setFormation(formation);
+  stage.setSelectedAnnotation(annotation.id);
+  scheduleAnnotationSave(formation.id);
+  elements.annotationDialog.close();
+  showToast(annotationId ? "文字注解已更新" : "文字注解已新增");
+}
+
+function deleteSelectedAnnotation() {
+  const formation = selectedFormation();
+  const annotationId = elements.annotationIdInput.value;
+  if (!formation || !annotationId) return;
+  const index = formation.annotations.findIndex((item) => item.id === annotationId);
+  if (index < 0) return;
+  formation.annotations.splice(index, 1);
+  state.selectedAnnotationId = null;
+  stage.setFormation(formation);
+  stage.setSelectedAnnotation(null);
+  scheduleAnnotationSave(formation.id);
+  elements.annotationDialog.close();
+  showToast("文字注解已刪除");
+}
+
+function handleAnnotationPositionChange(annotationId, position) {
+  const formation = selectedFormation();
+  const annotation = formation?.annotations.find((item) => item.id === annotationId);
+  if (!annotation) return;
+  annotation.x = position.x;
+  annotation.y = position.y;
+}
+
+function handleAnnotationPositionCommit(annotationId, position) {
+  const formation = selectedFormation();
+  const annotation = formation?.annotations.find((item) => item.id === annotationId);
+  if (!annotation) return;
+  annotation.x = position.x;
+  annotation.y = position.y;
+  state.selectedAnnotationId = annotationId;
+  stage.setSelectedAnnotation(annotationId);
+  scheduleAnnotationSave(formation.id);
+}
+
+function scheduleAnnotationSave(formationId) {
+  if (annotationSaveTimer) window.clearTimeout(annotationSaveTimer);
+  setSaveState("saving", "儲存中");
+  annotationSaveTimer = window.setTimeout(() => {
+    annotationSaveTimer = null;
+    persistFormationAnnotations(formationId);
+  }, 220);
+}
+
+async function persistFormationAnnotations(formationId) {
+  const project = state.project;
+  const formation = project?.formations.find((item) => item.id === formationId);
+  if (!project || !formation) return;
+  const snapshot = formation.annotations.map((annotation) => ({ ...annotation }));
+  try {
+    const payload = await api.updateFormation(project.id, formation.id, {
+      annotations: snapshot
+    });
+    const current = state.project?.formations.find((item) => item.id === formationId);
+    if (
+      current &&
+      JSON.stringify(current.annotations) === JSON.stringify(snapshot)
+    ) {
+      current.annotations = payload.formation.annotations;
+      current.updatedAt = payload.formation.updatedAt;
+    }
+    if (!annotationSaveTimer) setSaveState("saved", "已儲存");
+  } catch (error) {
+    setSaveState("error", "儲存失敗");
+    showError(error);
+  }
+}
+
+function createAnnotationId() {
+  return globalThis.crypto?.randomUUID?.() ??
+    `note-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 function selectFormation(formationId) {
   if (state.isPlaying) return;
   const formation = state.project?.formations.find((item) => item.id === formationId);
   if (!formation) return;
   state.selectedFormationId = formation.id;
   state.selectedDancerId = null;
+  state.selectedAnnotationId = null;
+  setAnnotationPlacement(false);
   stage.setSelectedDancer(null);
   stage.setFormation(formation);
+  stage.setSelectedAnnotation(null);
   renderDancerList();
   renderFormationTrack();
   renderFormationInspector();
@@ -516,7 +707,8 @@ async function persistFormationPositions(formationId) {
       current &&
       JSON.stringify(current.positions) === JSON.stringify(snapshot)
     ) {
-      replaceFormation(payload.formation);
+      current.positions = payload.formation.positions;
+      current.updatedAt = payload.formation.updatedAt;
     }
     if (!formationSaveTimer && pendingFormationSaveId === formationId) {
       pendingFormationSaveId = null;

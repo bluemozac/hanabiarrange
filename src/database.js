@@ -28,12 +28,24 @@ function createDatabase(filename = path.join(__dirname, "..", "data", "hanabi.db
 
   const schema = fs.readFileSync(path.join(__dirname, "..", "database", "schema.sql"), "utf8");
   db.exec(schema);
+  migrateDatabase(db);
 
   if (options.seed !== false && db.prepare("SELECT COUNT(*) AS count FROM projects").get().count === 0) {
     seedDemo(db);
   }
 
   return db;
+}
+
+function migrateDatabase(db) {
+  const formationColumns = db.prepare("PRAGMA table_info(formations)").all();
+  if (!formationColumns.some((column) => column.name === "annotations_json")) {
+    db.exec(
+      `ALTER TABLE formations
+       ADD COLUMN annotations_json TEXT NOT NULL DEFAULT '[]'
+       CHECK (json_valid(annotations_json))`
+    );
+  }
 }
 
 function seedDemo(db) {
