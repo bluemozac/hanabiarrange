@@ -30,6 +30,11 @@ test("project, dancer and formation CRUD workflow", async (t) => {
   assert.equal(health.response.status, 200);
   assert.equal(health.payload.status, "ok");
 
+  const pdfHealth = await request("/api/health/pdf");
+  assert.equal(pdfHealth.response.status, 200);
+  assert.equal(pdfHealth.payload.available, true);
+  assert.equal(pdfHealth.payload.source, "bundled");
+
   const createdProject = await request("/api/projects", {
     method: "POST",
     body: JSON.stringify({

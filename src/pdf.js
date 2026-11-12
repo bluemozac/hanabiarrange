@@ -7,38 +7,22 @@ const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
 const MARGIN = 48;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
+const PROJECT_ROOT = path.join(__dirname, "..");
+const BUNDLED_CJK_FONT = path.join(
+  PROJECT_ROOT,
+  "assets",
+  "fonts",
+  "NotoSansTC-Variable.ttf"
+);
 
 async function buildProjectPdf(project, options = {}) {
   const theme = options.theme === "dark" ? "dark" : "light";
   const mode = options.mode === "simple" ? "simple" : "full";
-  const regularFont = findFont([
-    process.env.PDF_CJK_FONT,
-    path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "Deng.ttf"),
-    path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "msjh.ttc"),
-    path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "simhei.ttf"),
-    path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "simfang.ttf"),
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-    "/usr/share/fonts/truetype/arphic/uming.ttc",
-    "/System/Library/Fonts/PingFang.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttf",
-    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttf"
-  ]);
-  const boldFont = findFont([
-    process.env.PDF_CJK_FONT_BOLD,
-    path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "Dengb.ttf"),
-    path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "msjhbd.ttc"),
-    path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "simhei.ttf"),
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
-    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttf"
-  ]);
+  const regularFont = findFont(regularFontCandidates());
+  const boldFont = findFont(boldFontCandidates());
 
   if (!regularFont) {
-    const error = new Error("找不到可嵌入的中文字型，請設定 PDF_CJK_FONT");
+    const error = new Error("找不到可嵌入的中文字型，請確認 assets/fonts/NotoSansTC-Variable.ttf");
     error.status = 500;
     throw error;
   }
@@ -82,6 +66,39 @@ async function buildProjectPdf(project, options = {}) {
   document.end();
 
   return completed;
+}
+
+function regularFontCandidates() {
+  return [
+    process.env.PDF_CJK_FONT,
+    BUNDLED_CJK_FONT,
+    path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "Deng.ttf"),
+    path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "msjh.ttc"),
+    path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "simhei.ttf"),
+    path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "simfang.ttf"),
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+    "/usr/share/fonts/truetype/arphic/uming.ttc",
+    "/System/Library/Fonts/PingFang.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttf",
+    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttf"
+  ];
+}
+
+function boldFontCandidates() {
+  return [
+    process.env.PDF_CJK_FONT_BOLD,
+    BUNDLED_CJK_FONT,
+    path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "Dengb.ttf"),
+    path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "msjhbd.ttc"),
+    path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "simhei.ttf"),
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttf"
+  ];
 }
 
 function drawSimpleFormation(document, project, formation, index, theme) {
@@ -542,4 +559,19 @@ function truncate(value, length) {
   return text.length > length ? `${text.slice(0, length - 1)}…` : text;
 }
 
-module.exports = { buildProjectPdf };
+function getPdfFontStatus() {
+  const regular = findFont(regularFontCandidates());
+  const bold = findFont(boldFontCandidates());
+  return {
+    available: Boolean(regular),
+    source: regular
+      ? regular.path === BUNDLED_CJK_FONT
+        ? "bundled"
+        : path.basename(regular.path)
+      : null,
+    family: regular?.family || path.basename(regular?.path || "") || null,
+    boldAvailable: Boolean(bold)
+  };
+}
+
+module.exports = { buildProjectPdf, getPdfFontStatus };

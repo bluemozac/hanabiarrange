@@ -1,6 +1,7 @@
 const path = require("node:path");
 const express = require("express");
 const { ApiError } = require("./http");
+const { getPdfFontStatus } = require("./pdf");
 const createProjectsRouter = require("./routes/projects");
 const createDancersRouter = require("./routes/dancers");
 const createFormationsRouter = require("./routes/formations");
@@ -13,6 +14,10 @@ function createApp(db) {
 
   app.get("/api/health", (_request, response) => {
     response.json({ status: "ok", database: "connected" });
+  });
+
+  app.get("/api/health/pdf", (_request, response) => {
+    response.json(getPdfFontStatus());
   });
 
   app.use("/api/projects", createProjectsRouter(db));

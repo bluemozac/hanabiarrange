@@ -71,7 +71,7 @@ $env:DATABASE_PATH = "D:\hanabiarr\data\local.db"
 npm start
 ```
 
-PDF 匯出會自動搜尋 Windows 的 DengXian／Microsoft JhengHei，以及 Ubuntu 常見的 Noto CJK、文泉驛中文字型。`.ttf`、`.otf` 與 `.ttc` 字型集合皆可解析。必要時可用 `PDF_CJK_FONT` 指定字型：
+PDF 匯出會優先使用專案內建的 Noto Sans TC，並自動搜尋 Windows 的 DengXian／Microsoft JhengHei，以及 Ubuntu 常見的 Noto CJK、文泉驛中文字型。`.ttf`、`.otf` 與 `.ttc` 字型集合皆可解析。必要時可用 `PDF_CJK_FONT` 指定字型：
 
 ```powershell
 $env:PDF_CJK_FONT = "C:\path\to\NotoSansCJK-Regular.ttc"
@@ -82,12 +82,14 @@ npm start
 
 前端 API 使用相對路徑 `/api/...`，不包含 `localhost`，所以瀏覽器會向目前網域請求，再由 nginx 轉到本機 Node.js。正式環境不需要把前端程式中的路徑改為雲端 IP 或網域。
 
-Ubuntu 安裝中文字型：
+安裝 nginx：
 
 ```bash
 sudo apt update
-sudo apt install -y fonts-noto-cjk nginx
+sudo apt install -y nginx
 ```
+
+專案已內建 `assets/fonts/NotoSansTC-Variable.ttf`，因此 PDF 不再依賴 Ubuntu 是否安裝系統中文字型。
 
 Node.js 建議只監聽本機，讓 nginx 對外提供服務：
 
@@ -97,6 +99,14 @@ HOST=127.0.0.1 \
 DATABASE_PATH=/var/lib/hanabi/hanabi.db \
 node src/server.js
 ```
+
+部署後可直接檢查雲端 PDF 字型：
+
+```bash
+curl https://stage.example.com/api/health/pdf
+```
+
+正常結果應包含 `"available": true` 與 `"source": "bundled"`。
 
 nginx 範例位於 [`deploy/nginx.conf.example`](deploy/nginx.conf.example)。設定時將 `server_name` 換成你的網域，啟用後執行：
 
@@ -129,6 +139,7 @@ sudo systemctl reload nginx
 | Method | Path | 用途 |
 | --- | --- | --- |
 | `GET` | `/api/health` | 健康檢查 |
+| `GET` | `/api/health/pdf` | 檢查 PDF 中文字型是否可用 |
 | `GET` | `/api/projects` | 專案列表 |
 | `POST` | `/api/projects` | 新增專案與第一個隊形 |
 | `GET` | `/api/projects/:projectId` | 專案、舞者與隊形完整資料 |
