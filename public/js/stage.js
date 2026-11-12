@@ -11,6 +11,8 @@ export class StageCanvas {
     this.displayPositions = {};
     this.selectedDancerId = null;
     this.draggingDancerId = null;
+    this.panning = null;
+    this.activePointerType = "mouse";
     this.hoveredDancerId = null;
     this.animation = null;
     this.animationFrame = null;
@@ -25,8 +27,10 @@ export class StageCanvas {
     canvas.addEventListener("pointermove", (event) => this.handlePointerMove(event));
     canvas.addEventListener("pointerup", (event) => this.handlePointerUp(event));
     canvas.addEventListener("pointercancel", (event) => this.handlePointerUp(event));
+    canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+    canvas.addEventListener("dragstart", (event) => event.preventDefault());
     canvas.addEventListener("pointerleave", () => {
-      if (!this.draggingDancerId) {
+      if (!this.draggingDancerId && !this.panning) {
         this.hoveredDancerId = null;
         this.canvas.style.cursor = "default";
         this.draw();
@@ -119,10 +123,22 @@ export class StageCanvas {
 
   handlePointerDown(event) {
     if (this.animation || !this.project) return;
+    this.activePointerType = event.pointerType || "mouse";
     const point = this.eventToStage(event);
     const hit = this.findDancerAt(point.x, point.y);
     if (!hit) {
       this.callbacks.onSelect?.(null);
+      if (event.pointerType === "touch") {
+        event.preventDefault();
+        this.panning = {
+          pointerId: event.pointerId,
+          lastX: event.clientX,
+          lastY: event.clientY
+        };
+        this.canvas.setPointerCapture(event.pointerId);
+        this.canvas.style.cursor = "grabbing";
+        this.callbacks.onPanStart?.();
+      }
       return;
     }
 
@@ -136,6 +152,17 @@ export class StageCanvas {
 
   handlePointerMove(event) {
     if (this.animation || !this.project) return;
+
+    if (this.panning && this.panning.pointerId === event.pointerId) {
+      event.preventDefault();
+      const deltaX = event.clientX - this.panning.lastX;
+      const deltaY = event.clientY - this.panning.lastY;
+      this.panning.lastX = event.clientX;
+      this.panning.lastY = event.clientY;
+      this.callbacks.onPan?.(deltaX, deltaY);
+      return;
+    }
+
     const point = this.eventToStage(event);
 
     if (this.draggingDancerId) {
@@ -150,7 +177,7 @@ export class StageCanvas {
       return;
     }
 
-    const hit = this.findDancerAt(point.x, point.y);
+    const hit = this.findDancerAt(point.x, point.y, event.pointerType);
     const hoveredId = hit?.id ?? null;
     if (hoveredId !== this.hoveredDancerId) {
       this.hoveredDancerId = hoveredId;
@@ -160,6 +187,16 @@ export class StageCanvas {
   }
 
   handlePointerUp(event) {
+    if (this.panning && this.panning.pointerId === event.pointerId) {
+      this.panning = null;
+      this.canvas.style.cursor = this.hoveredDancerId ? "grab" : "default";
+      if (this.canvas.hasPointerCapture(event.pointerId)) {
+        this.canvas.releasePointerCapture(event.pointerId);
+      }
+      this.callbacks.onPanEnd?.();
+      return;
+    }
+
     if (!this.draggingDancerId) return;
     const dancerId = this.draggingDancerId;
     this.draggingDancerId = null;
@@ -183,9 +220,9 @@ export class StageCanvas {
     };
   }
 
-  findDancerAt(x, y) {
+  findDancerAt(x, y, pointerType = this.activePointerType) {
     if (!this.project) return null;
-    const threshold = this.dancerRadius() + 9;
+    const threshold = this.dancerRadius() + (pointerType === "touch" ? 15 : 9);
     let closest = null;
     let closestDistance = Infinity;
 

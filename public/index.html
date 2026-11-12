@@ -128,45 +128,27 @@
         </header>
 
         <div class="workspace-body">
-          <section class="stage-panel">
-            <div class="canvas-stage-area" id="canvasStageArea">
+          <section class="stage-panel" id="stagePanel">
+            <div class="stage-toolbar">
+              <div class="stage-toolbar-title">
+                <p class="panel-label">FORMATION PREVIEW</p>
+                <h2 id="stageFormationName">尚未選擇隊形</h2>
+              </div>
+              <div class="stage-toolbar-controls">
+                <button class="icon-button view-toggle" id="stageGridButton" type="button" title="顯示網格" aria-label="顯示網格" aria-pressed="true">
+                  <svg><use href="#icon-grid"></use></svg>
+                </button>
+                <button class="icon-button view-toggle" id="stageThemeButton" type="button" title="使用深色舞台" aria-label="使用深色舞台" aria-pressed="false">
+                  <svg><use id="stageThemeIcon" href="#icon-moon"></use></svg>
+                </button>
+                <div class="stage-dimensions" id="stageDimensions">-- × --</div>
+              </div>
+            </div>
+            <div class="canvas-stage-area" id="canvasStageArea" tabindex="0" aria-label="舞台預覽區，可使用捲軸查看完整舞台">
               <div class="canvas-frame" id="canvasFrame">
-                <div class="stage-toolbar">
-                  <div class="stage-toolbar-title">
-                    <p class="panel-label">FORMATION PREVIEW</p>
-                    <h2 id="stageFormationName">尚未選擇隊形</h2>
-                  </div>
-                  <div class="stage-toolbar-controls">
-                    <button class="icon-button view-toggle" id="stageGridButton" type="button" title="顯示網格" aria-label="顯示網格" aria-pressed="true">
-                      <svg><use href="#icon-grid"></use></svg>
-                    </button>
-                    <button class="icon-button view-toggle" id="stageThemeButton" type="button" title="使用深色舞台" aria-label="使用深色舞台" aria-pressed="false">
-                      <svg><use id="stageThemeIcon" href="#icon-moon"></use></svg>
-                    </button>
-                    <div class="stage-dimensions" id="stageDimensions">-- × --</div>
-                  </div>
-                </div>
                 <canvas id="stageCanvas" aria-label="舞者隊形編輯舞台"></canvas>
                 <div class="canvas-corner-label">BACK</div>
                 <div class="audience-label">AUDIENCE / 觀眾席</div>
-                <div class="transport-bar">
-                  <div class="transport-controls">
-                    <button class="icon-button" id="previousFormationButton" type="button" title="上一個隊形" aria-label="上一個隊形">
-                      <svg><use href="#icon-skip-back"></use></svg>
-                    </button>
-                    <button class="play-button" id="playButton" type="button">
-                      <svg><use href="#icon-play"></use></svg>
-                      <span>播放走位</span>
-                    </button>
-                    <button class="icon-button" id="nextFormationButton" type="button" title="下一個隊形" aria-label="下一個隊形">
-                      <svg><use href="#icon-skip-forward"></use></svg>
-                    </button>
-                  </div>
-                  <div class="transition-readout">
-                    <span id="transitionDirection">目前隊形</span>
-                    <strong id="transitionTime">2.0s</strong>
-                  </div>
-                </div>
                 <button class="stage-resize-handle" id="stageResizeHandle" type="button" title="拖曳調整舞台顯示大小；雙擊重設" aria-label="拖曳調整舞台顯示大小">
                   <svg><use href="#icon-resize"></use></svg>
                 </button>
@@ -175,6 +157,24 @@
                   <strong>建立第一個隊形</strong>
                   <span>從時間軸新增隊形後即可開始編排</span>
                 </div>
+              </div>
+            </div>
+            <div class="transport-bar">
+              <div class="transport-controls">
+                <button class="icon-button" id="previousFormationButton" type="button" title="上一個隊形" aria-label="上一個隊形">
+                  <svg><use href="#icon-skip-back"></use></svg>
+                </button>
+                <button class="play-button" id="playButton" type="button">
+                  <svg><use href="#icon-play"></use></svg>
+                  <span>播放走位</span>
+                </button>
+                <button class="icon-button" id="nextFormationButton" type="button" title="下一個隊形" aria-label="下一個隊形">
+                  <svg><use href="#icon-skip-forward"></use></svg>
+                </button>
+              </div>
+              <div class="transition-readout">
+                <span id="transitionDirection">目前隊形</span>
+                <strong id="transitionTime">2.0s</strong>
               </div>
             </div>
           </section>

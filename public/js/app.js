@@ -17,6 +17,7 @@ const elements = {
   saveState: $("#saveState"),
   stageFormationName: $("#stageFormationName"),
   stageDimensions: $("#stageDimensions"),
+  stagePanel: $("#stagePanel"),
   stageCanvas: $("#stageCanvas"),
   canvasFrame: $("#canvasFrame"),
   stageGridButton: $("#stageGridButton"),
@@ -84,6 +85,9 @@ const stage = new StageCanvas(elements.stageCanvas, {
   onSelect: (dancerId) => selectDancer(dancerId),
   onPositionChange: (dancerId, position) => handlePositionChange(dancerId, position),
   onPositionCommit: (dancerId, position) => saveDancerPosition(dancerId, position),
+  onPan: (deltaX, deltaY) => panStage(deltaX, deltaY),
+  onPanStart: () => elements.canvasStageArea.classList.add("is-panning"),
+  onPanEnd: () => elements.canvasStageArea.classList.remove("is-panning"),
   onAnimationComplete: (formationId) => finishPlayback(formationId)
 });
 
@@ -820,6 +824,7 @@ function toggleStageGrid() {
 function applyStageAppearance() {
   const isDark = state.stageTheme === "dark";
   elements.canvasFrame.classList.toggle("is-dark", isDark);
+  elements.stagePanel.classList.toggle("is-dark", isDark);
   elements.stageThemeIcon.setAttribute("href", isDark ? "#icon-sun" : "#icon-moon");
   elements.stageThemeButton.setAttribute("aria-pressed", String(isDark));
   elements.stageThemeButton.title = isDark ? "使用淺色舞台" : "使用深色舞台";
@@ -873,6 +878,11 @@ function moveStageResize(event) {
   setStageFrameSize(width, height);
 }
 
+function panStage(deltaX, deltaY) {
+  elements.canvasStageArea.scrollLeft -= deltaX;
+  elements.canvasStageArea.scrollTop -= deltaY;
+}
+
 function endStageResize(event) {
   if (!stageResizeState) return;
   const resizeState = stageResizeState;
@@ -901,8 +911,8 @@ function setStageFrameSize(width, height) {
 
 function getStageResizeBounds() {
   const area = elements.canvasStageArea;
-  const maxWidth = Math.max(260, area.clientWidth);
-  const maxHeight = Math.max(180, area.clientHeight);
+  const maxWidth = Math.max(1800, area.clientWidth * 3);
+  const maxHeight = Math.max(1200, area.clientHeight * 3);
   return {
     minWidth: Math.min(260, maxWidth),
     minHeight: Math.min(180, maxHeight),

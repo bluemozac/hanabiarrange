@@ -568,30 +568,66 @@ svg {
 }
 
 .canvas-stage-area {
-  display: flex;
   position: relative;
+  display: flex;
   width: 100%;
   max-width: 100%;
   min-height: 0;
   flex: 1 1 0;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: #a9a59b transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.canvas-stage-area::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+.canvas-stage-area::-webkit-scrollbar-track {
+  background: rgba(222, 219, 210, 0.45);
+  border-radius: 8px;
+}
+
+.canvas-stage-area::-webkit-scrollbar-thumb {
+  background: #aaa69d;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background-clip: content-box;
+}
+
+.canvas-stage-area::-webkit-scrollbar-thumb:hover {
+  background: #807d76;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.canvas-stage-area.is-panning {
+  cursor: grabbing;
 }
 
 .canvas-frame {
   position: relative;
   width: 100%;
-  max-width: 100%;
+  max-width: none;
   min-height: 180px;
-  height: min(580px, 88%);
-  max-height: 100%;
-  flex: 0 1 auto;
+  height: min(620px, 96%);
+  max-height: none;
+  flex: 0 0 auto;
+  margin: auto;
   overflow: hidden;
   background: #e9e6de;
   border: 1px solid #d6d1c6;
   border-radius: 7px;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
   transition: background-color 180ms ease, border-color 180ms ease;
 }
 
@@ -611,6 +647,8 @@ svg {
   width: 100%;
   height: 100%;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .canvas-corner-label,
@@ -638,28 +676,28 @@ svg {
   color: #8fa0a5;
 }
 
-.canvas-frame.is-dark .stage-toolbar-title,
-.canvas-frame.is-dark .stage-toolbar-controls {
+.stage-panel.is-dark .stage-toolbar-title,
+.stage-panel.is-dark .stage-toolbar-controls {
   color: #eef2f0;
   background: rgba(23, 31, 34, 0.88);
   border-color: rgba(87, 103, 107, 0.8);
 }
 
-.canvas-frame.is-dark .stage-toolbar .panel-label {
+.stage-panel.is-dark .stage-toolbar .panel-label {
   color: #8fa0a5;
 }
 
-.canvas-frame.is-dark .stage-toolbar h2 {
+.stage-panel.is-dark .stage-toolbar h2 {
   color: #f7f7f3;
 }
 
-.canvas-frame.is-dark .stage-dimensions {
+.stage-panel.is-dark .stage-dimensions {
   color: #c1cac9;
   background: #2a3539;
   border-color: #46555a;
 }
 
-.canvas-frame.is-dark .view-toggle:not(.is-active) {
+.stage-panel.is-dark .view-toggle:not(.is-active) {
   color: #c4cdcb;
   background: #263136;
   border-color: #45545a;
@@ -804,18 +842,18 @@ svg {
   font-size: 12px;
 }
 
-.canvas-frame.is-dark .transport-controls,
-.canvas-frame.is-dark .transition-readout {
+.stage-panel.is-dark .transport-controls,
+.stage-panel.is-dark .transition-readout {
   color: #bfc8c6;
   background: rgba(23, 31, 34, 0.88);
   border-color: rgba(87, 103, 107, 0.8);
 }
 
-.canvas-frame.is-dark .transition-readout strong {
+.stage-panel.is-dark .transition-readout strong {
   color: #ffffff;
 }
 
-.canvas-frame.is-dark .transport-controls .icon-button:not(.play-button) {
+.stage-panel.is-dark .transport-controls .icon-button:not(.play-button) {
   color: #c4cdcb;
   background: #263136;
   border-color: #45545a;
