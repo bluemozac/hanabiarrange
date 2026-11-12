@@ -114,9 +114,11 @@ const stage = new StageCanvas(elements.stageCanvas, {
     handleAnnotationPositionChange(annotationId, position),
   onAnnotationPositionCommit: (annotationId, position) =>
     handleAnnotationPositionCommit(annotationId, position),
-  onPan: (deltaX, deltaY) => panStage(deltaX, deltaY),
-  onPanStart: () => elements.canvasStageArea.classList.add("is-panning"),
-  onPanEnd: () => elements.canvasStageArea.classList.remove("is-panning"),
+  onPageScroll: (deltaY) => window.scrollBy(0, -deltaY),
+  onMobileStageGesture: (gesture) => handleMobileStageGesture(gesture),
+  onMobileStageGestureStart: () =>
+    elements.canvasStageArea.classList.add("is-panning"),
+  onMobileStageGestureEnd: () => finishMobileStageGesture(),
   onAnimationComplete: (formationId) => finishPlayback(formationId)
 });
 
@@ -1274,9 +1276,22 @@ function moveStageResize(event) {
   setStageFrameSize(width, height);
 }
 
-function panStage(deltaX, deltaY) {
+function handleMobileStageGesture({ scale, deltaX, deltaY }) {
+  const rect = elements.canvasFrame.getBoundingClientRect();
+  const bounds = getStageResizeBounds();
+  const scaleFactor = Math.abs(scale - 1) < 0.002 ? 1 : scale;
+  const width = clamp(rect.width * scaleFactor, bounds.minWidth, bounds.maxWidth);
+  const height = clamp(rect.height * scaleFactor, bounds.minHeight, bounds.maxHeight);
+  if (scaleFactor !== 1 || width !== rect.width || height !== rect.height) {
+    setStageFrameSize(width, height);
+  }
   elements.canvasStageArea.scrollLeft -= deltaX;
   elements.canvasStageArea.scrollTop -= deltaY;
+}
+
+function finishMobileStageGesture() {
+  elements.canvasStageArea.classList.remove("is-panning");
+  persistStageFrameSize();
 }
 
 function endStageResize(event) {
@@ -1291,12 +1306,17 @@ function endStageResize(event) {
     elements.stageResizeHandle.releasePointerCapture(event.pointerId);
   }
   if (resizeState.moved) {
-    const rect = elements.canvasFrame.getBoundingClientRect();
-    writePreference(
-      STAGE_SIZE_KEY,
-      JSON.stringify({ width: Math.round(rect.width), height: Math.round(rect.height) })
-    );
+    persistStageFrameSize();
   }
+}
+
+function persistStageFrameSize() {
+  if (!elements.canvasFrame.style.width) return;
+  const rect = elements.canvasFrame.getBoundingClientRect();
+  writePreference(
+    STAGE_SIZE_KEY,
+    JSON.stringify({ width: Math.round(rect.width), height: Math.round(rect.height) })
+  );
 }
 
 function setStageFrameSize(width, height) {
