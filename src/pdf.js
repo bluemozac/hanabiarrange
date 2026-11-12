@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const PDFDocument = require("pdfkit");
+const fontkit = require("fontkit");
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
@@ -13,15 +14,26 @@ async function buildProjectPdf(project, options = {}) {
   const regularFont = findFont([
     process.env.PDF_CJK_FONT,
     path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "Deng.ttf"),
+    path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "msjh.ttc"),
     path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "simhei.ttf"),
     path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "simfang.ttf"),
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+    "/usr/share/fonts/truetype/arphic/uming.ttc",
+    "/System/Library/Fonts/PingFang.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttf",
     "/usr/share/fonts/truetype/wqy/wqy-microhei.ttf"
   ]);
   const boldFont = findFont([
     process.env.PDF_CJK_FONT_BOLD,
     path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "Dengb.ttf"),
+    path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "msjhbd.ttc"),
     path.join(process.env.WINDIR || "C:\\Windows", "Fonts", "simhei.ttf"),
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttf"
   ]);
 
@@ -42,8 +54,12 @@ async function buildProjectPdf(project, options = {}) {
     }
   });
 
-  document.registerFont("Body", regularFont);
-  document.registerFont("Bold", boldFont || regularFont);
+  document.registerFont("Body", regularFont.path, regularFont.family);
+  document.registerFont(
+    "Bold",
+    (boldFont || regularFont).path,
+    (boldFont || regularFont).family
+  );
 
   const chunks = [];
   const completed = new Promise((resolve, reject) => {
@@ -465,12 +481,31 @@ function setFont(document, size, bold = false) {
 }
 
 function findFont(candidates) {
-  return candidates.find(
-    (candidate) =>
-      candidate &&
-      /\.(ttf|otf)$/i.test(candidate) &&
-      fs.existsSync(candidate)
-  ) || null;
+  for (const candidate of candidates) {
+    if (!candidate || !fs.existsSync(candidate)) continue;
+    try {
+      const font = fontkit.openSync(candidate);
+      if (Array.isArray(font.fonts) && font.fonts.length > 0) {
+        const selected =
+          font.fonts.find((item) => {
+            const name = `${item.familyName || ""} ${item.postscriptName || ""}`;
+            return /cjk|jheng|yahei|ming|wqy|hei|traditional|tc/i.test(name);
+          }) ||
+          font.fonts.find((item) => item.hasGlyphForCodePoint?.(0x4e2d)) ||
+          font.fonts[0];
+        if (selected?.postscriptName) {
+          return { path: candidate, family: selected.postscriptName };
+        }
+        continue;
+      }
+      if (typeof font.createSubset === "function") {
+        return { path: candidate, family: null };
+      }
+    } catch (error) {
+      console.warn(`Unable to inspect PDF font ${candidate}: ${error.message}`);
+    }
+  }
+  return null;
 }
 
 function fitRect(maxWidth, maxHeight, ratio) {

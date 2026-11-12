@@ -3,12 +3,13 @@ const { createApp } = require("./app");
 const { createDatabase } = require("./database");
 
 const port = Number(process.env.PORT) || 3030;
+const host = process.env.HOST || "0.0.0.0";
 const databasePath = process.env.DATABASE_PATH || path.join(__dirname, "..", "data", "hanabi.db");
 const db = createDatabase(databasePath);
 const app = createApp(db);
 
-const server = app.listen(port, () => {
-  console.log(`Hanabi Stage is running at http://localhost:${port}`);
+const server = app.listen(port, host, () => {
+  console.log(`Hanabi Stage is running at http://${host}:${port}`);
   console.log(`SQLite database: ${databasePath}`);
 });
 

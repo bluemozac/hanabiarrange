@@ -71,12 +71,41 @@ $env:DATABASE_PATH = "D:\hanabiarr\data\local.db"
 npm start
 ```
 
-PDF 匯出會自動尋找 Windows 的 DengXian／SimHei 等中文字型。部署到其他系統時，可用 `PDF_CJK_FONT` 指定可嵌入的 `.ttf` 或 `.otf` 中文字型：
+PDF 匯出會自動搜尋 Windows 的 DengXian／Microsoft JhengHei，以及 Ubuntu 常見的 Noto CJK、文泉驛中文字型。`.ttf`、`.otf` 與 `.ttc` 字型集合皆可解析。必要時可用 `PDF_CJK_FONT` 指定字型：
 
 ```powershell
-$env:PDF_CJK_FONT = "C:\path\to\NotoSansCJK-Regular.ttf"
+$env:PDF_CJK_FONT = "C:\path\to\NotoSansCJK-Regular.ttc"
 npm start
 ```
+
+## Ubuntu + nginx
+
+前端 API 使用相對路徑 `/api/...`，不包含 `localhost`，所以瀏覽器會向目前網域請求，再由 nginx 轉到本機 Node.js。正式環境不需要把前端程式中的路徑改為雲端 IP 或網域。
+
+Ubuntu 安裝中文字型：
+
+```bash
+sudo apt update
+sudo apt install -y fonts-noto-cjk nginx
+```
+
+Node.js 建議只監聽本機，讓 nginx 對外提供服務：
+
+```bash
+PORT=3030 \
+HOST=127.0.0.1 \
+DATABASE_PATH=/var/lib/hanabi/hanabi.db \
+node src/server.js
+```
+
+nginx 範例位於 [`deploy/nginx.conf.example`](deploy/nginx.conf.example)。設定時將 `server_name` 換成你的網域，啟用後執行：
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+建議使用獨立網域或站台根路徑，例如 `https://stage.example.com/`。目前前端資源與 API 路徑以根路徑為基準；若要部署在 `https://example.com/hanabi/` 這類子目錄，需要另外加入 base path 設定。
 
 ## 資料模型
 
