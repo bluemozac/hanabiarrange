@@ -8,9 +8,12 @@
 - 16:9、4:3、1:1 與自訂舞台尺寸
 - 舞者代號、名稱、代表顏色的管理
 - 多隊形時間軸與進場過渡秒數
+- 時間軸隊形可透過拖曳把手調整演出順序
 - Canvas 滑鼠／觸控拖曳，觸控空白區可平移舞台
 - 舞台顯示尺寸可拖曳調整，超出自動顯示雙向捲軸
 - 時間軸固定在視窗底部
+- 手機版保留可橫向滑動的舞者列
+- 手機版隊形設定與時間軸採互斥摺疊面板
 - 舞台深色模式、網格開關與強化網格
 - `easeInOutCubic` 隊形間平滑走位預覽
 - 拖曳座標即時自動儲存
@@ -109,6 +112,7 @@ npm start
 | `DELETE` | `/api/projects/:projectId/dancers/:dancerId` | 刪除舞者 |
 | `GET` | `/api/projects/:projectId/formations` | 隊形列表 |
 | `POST` | `/api/projects/:projectId/formations` | 新增隊形 |
+| `PUT` | `/api/projects/:projectId/formations/reorder` | 批次調整隊形順序 |
 | `PATCH` | `/api/projects/:projectId/formations/:formationId` | 更新名稱、秒數或座標 |
 | `DELETE` | `/api/projects/:projectId/formations/:formationId` | 刪除隊形 |
 

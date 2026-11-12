@@ -868,6 +868,17 @@ svg {
   background: rgba(251, 250, 246, 0.68);
 }
 
+.inspector-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.mobile-panel-toggle {
+  display: none;
+}
+
 .inspector-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1061,6 +1072,42 @@ svg {
   border-top: 1px solid var(--line);
 }
 
+.timeline-body {
+  min-width: 0;
+}
+
+.mobile-panel-toggle-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  text-align: left;
+}
+
+.mobile-panel-toggle-copy strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mobile-panel-toggle-copy small {
+  overflow: hidden;
+  color: #8b8e88;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-panel-chevron {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  color: #858882;
+  transition: transform 160ms ease;
+}
+
+.mobile-panel-toggle[aria-expanded="true"] .mobile-panel-chevron {
+  transform: rotate(180deg);
+}
+
 .timeline-header {
   display: flex;
   align-items: center;
@@ -1094,6 +1141,73 @@ svg {
   border: 1px solid #dcd8ce;
   border-radius: 6px;
   text-align: left;
+}
+
+.formation-card-copy {
+  padding-right: 16px;
+}
+
+.formation-drag-handle {
+  position: absolute;
+  top: 6px;
+  right: 5px;
+  z-index: 2;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  place-items: center;
+  color: #a2a39e;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: grab;
+  opacity: 0.55;
+  touch-action: none;
+}
+
+.formation-drag-handle:hover {
+  color: var(--ink);
+  background: #ece9e1;
+  opacity: 1;
+}
+
+.formation-drag-handle svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  stroke: none;
+}
+
+.formation-card.is-selected .formation-drag-handle {
+  color: var(--accent);
+}
+
+.formation-card.is-dragging {
+  z-index: 3;
+  color: var(--ink);
+  background: #fff4ed;
+  border-color: var(--accent);
+  border-style: dashed;
+  box-shadow: 0 9px 24px rgba(235, 94, 53, 0.18);
+  opacity: 0.72;
+}
+
+.formation-track.is-sorting {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.formation-track.is-sorting .formation-card:not(.is-dragging) {
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .formation-drag-handle {
+    color: #747872;
+    background: #f2efe8;
+    opacity: 0.9;
+  }
 }
 
 .formation-card::after {
@@ -1375,12 +1489,40 @@ svg {
   }
 
   .side-section--dancers {
-    display: none;
+    display: block;
+    min-width: 0;
+  }
+
+  .side-section--dancers .section-heading {
+    display: flex;
+    margin-bottom: 8px;
+  }
+
+  .side-section--dancers .dancer-list {
+    display: flex;
+    gap: 6px;
+    padding-bottom: 3px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .side-section--dancers .dancer-item {
+    min-width: 68px;
+    margin: 0;
+    padding: 7px;
+    border-color: #30363b;
+  }
+
+  .side-section--dancers .dancer-item.is-selected {
+    border-color: #596268;
   }
 
   .workspace {
-    min-height: 1040px;
-    grid-template-rows: 76px auto 164px;
+    height: auto;
+    min-height: 0;
+    grid-template-rows: 76px auto auto;
+    align-content: start;
+    overflow: visible;
   }
 
   .workspace-header {
@@ -1406,6 +1548,8 @@ svg {
   .workspace-body {
     display: flex;
     flex-direction: column;
+    min-height: 0;
+    overflow: visible;
   }
 
   .stage-panel {
@@ -1419,13 +1563,78 @@ svg {
   }
 
   .inspector {
-    min-height: 390px;
-    padding: 18px 16px;
+    min-height: 0;
+    padding: 0;
     border-top: 1px solid var(--line);
+    overflow: hidden;
+  }
+
+  .inspector:not(.is-collapsed) {
+    height: auto;
+    overflow: visible;
+  }
+
+  .inspector-body {
+    padding: 16px;
+  }
+
+  .inspector.is-collapsed {
+    height: 56px;
+  }
+
+  .inspector.is-collapsed .inspector-body {
+    display: none;
   }
 
   .timeline {
-    padding: 15px 14px;
+    height: auto;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .timeline:not(.is-collapsed) {
+    overflow: visible;
+  }
+
+  .timeline-body {
+    padding: 14px;
+  }
+
+  .timeline.is-collapsed {
+    height: 56px;
+  }
+
+  .timeline.is-collapsed .timeline-body {
+    display: none;
+  }
+
+  .timeline-header {
+    justify-content: flex-end;
+    margin-bottom: 12px;
+  }
+
+  .timeline-header > div {
+    display: none;
+  }
+
+  .mobile-panel-toggle {
+    display: flex;
+    width: 100%;
+    height: 56px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 0 16px;
+    color: var(--ink);
+    background: rgba(251, 250, 246, 0.96);
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+  }
+
+  .timeline .mobile-panel-toggle {
+    border-top: 1px solid var(--line);
+    border-bottom: 0;
   }
 
   .formation-card {

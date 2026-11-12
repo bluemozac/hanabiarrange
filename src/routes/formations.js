@@ -74,6 +74,48 @@ function createFormationsRouter(db) {
     });
   });
 
+  router.put("/reorder", (request, response) => {
+    const project = requireProject(request);
+    if (!Array.isArray(request.body?.formationIds)) {
+      throw new ApiError(400, "formationIds 必須是隊形 ID 陣列");
+    }
+
+    const formationIds = request.body.formationIds.map((id) => parseId(id, "隊形 ID"));
+    const current = db
+      .prepare("SELECT id FROM formations WHERE project_id = ? ORDER BY sequence_index, id")
+      .all(project.id);
+    const currentIds = new Set(current.map((formation) => formation.id));
+    const uniqueIds = new Set(formationIds);
+
+    if (
+      formationIds.length !== current.length ||
+      uniqueIds.size !== formationIds.length ||
+      formationIds.some((id) => !currentIds.has(id))
+    ) {
+      throw new ApiError(400, "formationIds 必須完整且不重複包含此專案的所有隊形");
+    }
+
+    const reorder = db.transaction(() => {
+      const setTemporaryIndex = db.prepare(
+        "UPDATE formations SET sequence_index = ? WHERE id = ? AND project_id = ?"
+      );
+      formationIds.forEach((formationId, index) => {
+        setTemporaryIndex.run(-(index + 1), formationId, project.id);
+      });
+      formationIds.forEach((formationId, index) => {
+        setTemporaryIndex.run(index, formationId, project.id);
+      });
+      touchProject(db, project.id);
+    });
+    reorder();
+
+    const formations = db
+      .prepare("SELECT * FROM formations WHERE project_id = ? ORDER BY sequence_index, id")
+      .all(project.id)
+      .map(mapFormation);
+    response.json({ formations });
+  });
+
   router.patch("/:formationId", (request, response) => {
     const project = requireProject(request);
     const formationId = parseId(request.params.formationId, "隊形 ID");

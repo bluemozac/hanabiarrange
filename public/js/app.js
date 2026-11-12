@@ -6,6 +6,7 @@ const DEFAULT_DANCER_COLOR = "#f97316";
 const STAGE_THEME_KEY = "hanabi-stage-theme";
 const STAGE_GRID_KEY = "hanabi-stage-grid";
 const STAGE_SIZE_KEY = "hanabi-stage-size";
+const mobileLayout = window.matchMedia("(max-width: 720px)");
 
 const elements = {
   projectSelect: $("#projectSelect"),
@@ -48,6 +49,12 @@ const elements = {
   formationCount: $("#formationCount"),
   totalDuration: $("#totalDuration"),
   formationTrack: $("#formationTrack"),
+  inspectorPanel: $("#inspectorPanel"),
+  inspectorToggle: $("#inspectorToggle"),
+  inspectorToggleSummary: $("#inspectorToggleSummary"),
+  timelinePanel: $("#timelinePanel"),
+  timelineToggle: $("#timelineToggle"),
+  timelineToggleSummary: $("#timelineToggleSummary"),
   projectDialog: $("#projectDialog"),
   projectForm: $("#projectForm"),
   projectIdInput: $("#projectIdInput"),
@@ -80,6 +87,7 @@ const state = {
 let formationSaveTimer = null;
 let pendingFormationSaveId = null;
 let stageResizeState = null;
+let formationDragState = null;
 
 const stage = new StageCanvas(elements.stageCanvas, {
   onSelect: (dancerId) => selectDancer(dancerId),
@@ -101,6 +109,7 @@ function selectedDancer() {
 
 async function init() {
   bindEvents();
+  initializeMobilePanels();
   applyStageAppearance();
   restoreStageSize();
   try {
@@ -142,6 +151,9 @@ function bindEvents() {
   elements.stageResizeHandle.addEventListener("pointercancel", endStageResize);
   elements.stageResizeHandle.addEventListener("dblclick", resetStageSize);
   window.addEventListener("resize", clampStageFrame);
+  mobileLayout.addEventListener("change", initializeMobilePanels);
+  elements.inspectorToggle.addEventListener("click", () => toggleMobilePanel("inspector"));
+  elements.timelineToggle.addEventListener("click", () => toggleMobilePanel("timeline"));
 
   elements.playButton.addEventListener("click", playCurrentTransition);
   elements.previousFormationButton.addEventListener("click", () => stepFormation(-1));
@@ -153,9 +165,21 @@ function bindEvents() {
   });
 
   elements.formationTrack.addEventListener("click", (event) => {
+    if (event.target.closest("[data-drag-formation-id]")) return;
     const card = event.target.closest("[data-formation-id]");
     if (card) selectFormation(Number(card.dataset.formationId));
   });
+  elements.formationTrack.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const card = event.target.closest("[data-formation-id]");
+    if (!card) return;
+    event.preventDefault();
+    selectFormation(Number(card.dataset.formationId));
+  });
+  elements.formationTrack.addEventListener("pointerdown", beginFormationDrag);
+  elements.formationTrack.addEventListener("pointermove", moveFormationDrag);
+  elements.formationTrack.addEventListener("pointerup", endFormationDrag);
+  elements.formationTrack.addEventListener("pointercancel", cancelFormationDrag);
 
   elements.projectForm.addEventListener("submit", submitProjectForm);
   elements.stageRatioSelect.addEventListener("change", applyRatioPreset);
@@ -289,14 +313,18 @@ function renderFormationTrack() {
   elements.formationTrack.innerHTML = formations
     .map(
       (formation) => `
-        <button class="formation-card ${formation.id === state.selectedFormationId ? "is-selected" : ""}"
-          type="button" data-formation-id="${formation.id}">
+        <div class="formation-card ${formation.id === state.selectedFormationId ? "is-selected" : ""}"
+          role="button" tabindex="0" data-formation-id="${formation.id}">
           <span class="formation-number">${String(formation.sequenceIndex + 1).padStart(2, "0")}</span>
           <span class="formation-card-copy">
             <span class="formation-card-name">${escapeHtml(formation.name)}</span>
             <span class="formation-card-time">${formation.transitionSeconds.toFixed(1)}s transition</span>
           </span>
-        </button>
+          <button class="formation-drag-handle" type="button"
+            data-drag-formation-id="${formation.id}" title="拖曳調整隊形順序" aria-label="拖曳調整 ${escapeHtml(formation.name)} 的順序">
+            <svg><use href="#icon-grip"></use></svg>
+          </button>
+        </div>
       `
     )
     .join("");
@@ -383,10 +411,17 @@ function renderTransport() {
 
 function renderStats() {
   const formations = state.project?.formations ?? [];
-  elements.formationCount.textContent = String(formations.length);
-  elements.totalDuration.textContent = `${formations
+  const totalDuration = formations
     .reduce((total, formation) => total + formation.transitionSeconds, 0)
-    .toFixed(1)}s`;
+    .toFixed(1);
+  elements.formationCount.textContent = String(formations.length);
+  elements.totalDuration.textContent = `${totalDuration}s`;
+  const formation = selectedFormation();
+  elements.inspectorToggleSummary.textContent = formation
+    ? `${formation.name} · ${state.project?.dancers.length ?? 0} 位舞者`
+    : "尚未選擇隊形";
+  elements.timelineToggleSummary.textContent =
+    `${formations.length} 個隊形 · ${totalDuration} 秒`;
 }
 
 function updateEmptyState() {
@@ -398,6 +433,10 @@ function selectDancer(dancerId) {
   if (state.isPlaying) return;
   state.selectedDancerId =
     state.project?.dancers.some((dancer) => dancer.id === dancerId) ? dancerId : null;
+  if (dancerId && mobileLayout.matches) {
+    setMobilePanelExpanded("inspector", true);
+    setMobilePanelExpanded("timeline", false);
+  }
   stage.setSelectedDancer(state.selectedDancerId);
   renderDancerList();
   renderDancerInspector();
@@ -729,6 +768,133 @@ async function submitFormationEdit(event) {
   }
 }
 
+function beginFormationDrag(event) {
+  const handle = event.target.closest("[data-drag-formation-id]");
+  if (!handle || !state.project) return;
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+
+  const card = handle.closest("[data-formation-id]");
+  if (!card) return;
+  event.preventDefault();
+  event.stopPropagation();
+
+  formationDragState = {
+    pointerId: event.pointerId,
+    formationId: Number(handle.dataset.dragFormationId),
+    card,
+    handle,
+    startX: event.clientX,
+    startY: event.clientY,
+    startOrder: state.project.formations.map((formation) => formation.id),
+    moved: false
+  };
+  handle.setPointerCapture(event.pointerId);
+  elements.formationTrack.classList.add("is-sorting");
+  card.classList.add("is-dragging");
+}
+
+function moveFormationDrag(event) {
+  if (!formationDragState || formationDragState.pointerId !== event.pointerId) return;
+  const distance = Math.hypot(
+    event.clientX - formationDragState.startX,
+    event.clientY - formationDragState.startY
+  );
+  if (!formationDragState.moved && distance < 4) return;
+
+  event.preventDefault();
+  formationDragState.moved = true;
+  autoScrollFormationTrack(event.clientX);
+  const cards = [...elements.formationTrack.querySelectorAll(".formation-card:not(.is-dragging)")];
+  const reference = cards.find((card) => {
+    const rect = card.getBoundingClientRect();
+    return event.clientX < rect.left + rect.width / 2;
+  });
+  if (reference) {
+    elements.formationTrack.insertBefore(formationDragState.card, reference);
+  } else {
+    elements.formationTrack.append(formationDragState.card);
+  }
+}
+
+function endFormationDrag(event) {
+  if (!formationDragState || formationDragState.pointerId !== event.pointerId) return;
+  const drag = formationDragState;
+  formationDragState = null;
+  event.preventDefault();
+  event.stopPropagation();
+  elements.formationTrack.classList.remove("is-sorting");
+  drag.card.classList.remove("is-dragging");
+  if (drag.handle.hasPointerCapture(event.pointerId)) {
+    drag.handle.releasePointerCapture(event.pointerId);
+  }
+  if (!drag.moved) return;
+
+  const orderedIds = [...elements.formationTrack.querySelectorAll("[data-formation-id]")].map(
+    (card) => Number(card.dataset.formationId)
+  );
+  if (orderedIds.every((id, index) => id === drag.startOrder[index])) return;
+  applyFormationOrder(orderedIds);
+  persistFormationOrder(orderedIds);
+}
+
+function cancelFormationDrag(event) {
+  if (!formationDragState || formationDragState.pointerId !== event.pointerId) return;
+  const drag = formationDragState;
+  formationDragState = null;
+  elements.formationTrack.classList.remove("is-sorting");
+  drag.card.classList.remove("is-dragging");
+  if (drag.handle.hasPointerCapture(event.pointerId)) {
+    drag.handle.releasePointerCapture(event.pointerId);
+  }
+  applyFormationOrder(drag.startOrder);
+}
+
+function autoScrollFormationTrack(pointerX) {
+  const rect = elements.formationTrack.getBoundingClientRect();
+  const edgeSize = 52;
+  if (pointerX < rect.left + edgeSize) {
+    elements.formationTrack.scrollLeft -= 14;
+  } else if (pointerX > rect.right - edgeSize) {
+    elements.formationTrack.scrollLeft += 14;
+  }
+}
+
+function applyFormationOrder(formationIds) {
+  if (!state.project) return;
+  const byId = new Map(state.project.formations.map((formation) => [formation.id, formation]));
+  state.project.formations = formationIds.map((formationId, index) => ({
+    ...byId.get(formationId),
+    sequenceIndex: index
+  }));
+  renderFormationTrack();
+  renderFormationInspector();
+  renderTransport();
+  renderStats();
+}
+
+async function persistFormationOrder(formationIds) {
+  if (!state.project) return;
+  const projectId = state.project.id;
+  const selectedFormationId = state.selectedFormationId;
+  setSaveState("saving", "排序中");
+  try {
+    const payload = await api.reorderFormations(projectId, formationIds);
+    if (state.project?.id === projectId) {
+      state.project.formations = payload.formations;
+      state.selectedFormationId = selectedFormationId;
+      renderFormationTrack();
+      renderFormationInspector();
+      renderTransport();
+      renderStats();
+      setSaveState("saved", "已儲存");
+    }
+  } catch (error) {
+    setSaveState("error", "排序失敗");
+    showError(error);
+    await loadProject(projectId, selectedFormationId);
+  }
+}
+
 async function createFormationFromCurrent() {
   const current = selectedFormation();
   if (!state.project || !current) {
@@ -807,6 +973,41 @@ function showToast(message, isError = false) {
   toast.textContent = message;
   elements.toastRegion.append(toast);
   window.setTimeout(() => toast.remove(), 3600);
+}
+
+function initializeMobilePanels() {
+  const expanded = !mobileLayout.matches;
+  setMobilePanelExpanded("inspector", expanded);
+  setMobilePanelExpanded("timeline", expanded);
+}
+
+function toggleMobilePanel(panelName) {
+  if (!mobileLayout.matches) return;
+  const panel = panelName === "inspector"
+    ? elements.inspectorPanel
+    : elements.timelinePanel;
+  const isExpanded = !panel.classList.contains("is-collapsed");
+  if (isExpanded) {
+    setMobilePanelExpanded(panelName, false);
+    return;
+  }
+
+  setMobilePanelExpanded(panelName, true);
+  setMobilePanelExpanded(
+    panelName === "inspector" ? "timeline" : "inspector",
+    false
+  );
+}
+
+function setMobilePanelExpanded(panelName, expanded) {
+  const panel = panelName === "inspector"
+    ? elements.inspectorPanel
+    : elements.timelinePanel;
+  const toggle = panelName === "inspector"
+    ? elements.inspectorToggle
+    : elements.timelineToggle;
+  panel.classList.toggle("is-collapsed", !expanded);
+  toggle.setAttribute("aria-expanded", String(expanded));
 }
 
 function toggleStageTheme() {

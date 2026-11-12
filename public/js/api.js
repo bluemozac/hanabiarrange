@@ -78,6 +78,13 @@ export const api = {
     });
   },
 
+  reorderFormations(projectId, formationIds) {
+    return request(`/api/projects/${projectId}/formations/reorder`, {
+      method: "PUT",
+      body: jsonBody({ formationIds })
+    });
+  },
+
   updateFormation(projectId, formationId, values) {
     return request(`/api/projects/${projectId}/formations/${formationId}`, {
       method: "PATCH",

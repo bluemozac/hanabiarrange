@@ -60,6 +60,14 @@
       <symbol id="icon-resize" viewBox="0 0 24 24">
         <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
       </symbol>
+      <symbol id="icon-grip" viewBox="0 0 24 24">
+        <circle cx="9" cy="5" r="1" />
+        <circle cx="15" cy="5" r="1" />
+        <circle cx="9" cy="12" r="1" />
+        <circle cx="15" cy="12" r="1" />
+        <circle cx="9" cy="19" r="1" />
+        <circle cx="15" cy="19" r="1" />
+      </symbol>
     </svg>
 
     <div class="app-shell">
@@ -179,105 +187,123 @@
             </div>
           </section>
 
-          <aside class="inspector">
-            <div class="inspector-tabs">
-              <span class="inspector-tab is-active">隊形</span>
-              <span class="inspector-tab">舞者</span>
-            </div>
+          <aside class="inspector" id="inspectorPanel">
+            <button class="mobile-panel-toggle" id="inspectorToggle" type="button" aria-expanded="false" aria-controls="inspectorBody">
+              <span class="mobile-panel-toggle-copy">
+                <strong>隊形與舞者設定</strong>
+                <small id="inspectorToggleSummary">尚未選擇隊形</small>
+              </span>
+              <svg class="mobile-panel-chevron"><use href="#icon-chevron-down"></use></svg>
+            </button>
+            <div class="inspector-body" id="inspectorBody">
+              <div class="inspector-tabs">
+                <span class="inspector-tab is-active">隊形</span>
+                <span class="inspector-tab">舞者</span>
+              </div>
 
-            <section class="inspector-section">
-              <div class="inspector-heading">
-                <div>
-                  <p class="panel-label">TIMING</p>
-                  <h3>隊形設定</h3>
+              <section class="inspector-section">
+                <div class="inspector-heading">
+                  <div>
+                    <p class="panel-label">TIMING</p>
+                    <h3>隊形設定</h3>
+                  </div>
+                  <div class="inspector-heading-actions">
+                    <span class="sequence-chip" id="formationSequence">--</span>
+                    <button class="icon-button icon-button--danger" id="deleteFormationButton" type="button" title="刪除隊形" aria-label="刪除隊形">
+                      <svg><use href="#icon-trash"></use></svg>
+                    </button>
+                  </div>
                 </div>
-                <div class="inspector-heading-actions">
-                  <span class="sequence-chip" id="formationSequence">--</span>
-                  <button class="icon-button icon-button--danger" id="deleteFormationButton" type="button" title="刪除隊形" aria-label="刪除隊形">
+                <form id="formationForm" class="stack-form">
+                  <label class="field">
+                    <span>隊形名稱</span>
+                    <input id="formationNameInput" name="name" type="text" maxlength="100" required />
+                  </label>
+                  <label class="field">
+                    <span>進場過渡</span>
+                    <div class="input-with-suffix">
+                      <input id="transitionInput" name="transitionSeconds" type="number" min="0" max="60" step="0.1" required />
+                      <span>秒</span>
+                    </div>
+                  </label>
+                  <button class="primary-button" type="submit">套用隊形設定</button>
+                </form>
+              </section>
+
+              <section class="inspector-section inspector-section--dancer">
+                <div class="inspector-heading">
+                  <div>
+                    <p class="panel-label">DANCER</p>
+                    <h3 id="selectedDancerTitle">未選取舞者</h3>
+                  </div>
+                  <button class="icon-button icon-button--danger" id="deleteDancerButton" type="button" title="刪除舞者" aria-label="刪除舞者" disabled>
                     <svg><use href="#icon-trash"></use></svg>
                   </button>
                 </div>
-              </div>
-              <form id="formationForm" class="stack-form">
-                <label class="field">
-                  <span>隊形名稱</span>
-                  <input id="formationNameInput" name="name" type="text" maxlength="100" required />
-                </label>
-                <label class="field">
-                  <span>進場過渡</span>
-                  <div class="input-with-suffix">
-                    <input id="transitionInput" name="transitionSeconds" type="number" min="0" max="60" step="0.1" required />
-                    <span>秒</span>
+                <form id="dancerForm" class="stack-form">
+                  <div class="field-row">
+                    <label class="field">
+                      <span>代號</span>
+                      <input id="dancerCodeInput" name="code" type="text" maxlength="20" disabled />
+                    </label>
+                    <label class="field">
+                      <span>顏色</span>
+                      <input id="dancerColorInput" name="color" class="color-input" type="color" disabled />
+                    </label>
                   </div>
-                </label>
-                <button class="primary-button" type="submit">套用隊形設定</button>
-              </form>
-            </section>
+                  <label class="field">
+                    <span>名稱</span>
+                    <input id="dancerNameInput" name="name" type="text" maxlength="80" disabled />
+                  </label>
+                  <div class="coordinate-row">
+                    <label class="coordinate-field">
+                      <span>X 座標</span>
+                      <input id="dancerXInput" type="number" min="0" step="0.01" disabled />
+                    </label>
+                    <label class="coordinate-field">
+                      <span>Y 座標</span>
+                      <input id="dancerYInput" type="number" min="0" step="0.01" disabled />
+                    </label>
+                  </div>
+                  <button class="secondary-button" id="saveDancerButton" type="submit" disabled>儲存舞者資料</button>
+                </form>
+              </section>
 
-            <section class="inspector-section inspector-section--dancer">
-              <div class="inspector-heading">
+              <div class="inspector-stats">
                 <div>
-                  <p class="panel-label">DANCER</p>
-                  <h3 id="selectedDancerTitle">未選取舞者</h3>
+                  <span>隊形總數</span>
+                  <strong id="formationCount">0</strong>
                 </div>
-                <button class="icon-button icon-button--danger" id="deleteDancerButton" type="button" title="刪除舞者" aria-label="刪除舞者" disabled>
-                  <svg><use href="#icon-trash"></use></svg>
-                </button>
-              </div>
-              <form id="dancerForm" class="stack-form">
-                <div class="field-row">
-                  <label class="field">
-                    <span>代號</span>
-                    <input id="dancerCodeInput" name="code" type="text" maxlength="20" disabled />
-                  </label>
-                  <label class="field">
-                    <span>顏色</span>
-                    <input id="dancerColorInput" name="color" class="color-input" type="color" disabled />
-                  </label>
+                <div>
+                  <span>演出總長</span>
+                  <strong id="totalDuration">0.0s</strong>
                 </div>
-                <label class="field">
-                  <span>名稱</span>
-                  <input id="dancerNameInput" name="name" type="text" maxlength="80" disabled />
-                </label>
-                <div class="coordinate-row">
-                  <label class="coordinate-field">
-                    <span>X 座標</span>
-                  <input id="dancerXInput" type="number" min="0" step="0.01" disabled />
-                  </label>
-                  <label class="coordinate-field">
-                    <span>Y 座標</span>
-                  <input id="dancerYInput" type="number" min="0" step="0.01" disabled />
-                  </label>
-                </div>
-                <button class="secondary-button" id="saveDancerButton" type="submit" disabled>儲存舞者資料</button>
-              </form>
-            </section>
-
-            <div class="inspector-stats">
-              <div>
-                <span>隊形總數</span>
-                <strong id="formationCount">0</strong>
-              </div>
-              <div>
-                <span>演出總長</span>
-                <strong id="totalDuration">0.0s</strong>
               </div>
             </div>
           </aside>
         </div>
 
-        <section class="timeline">
-          <div class="timeline-header">
-            <div>
-              <p class="panel-label">SEQUENCE</p>
-              <h2>隊形時間軸</h2>
+        <section class="timeline" id="timelinePanel">
+          <button class="mobile-panel-toggle" id="timelineToggle" type="button" aria-expanded="false" aria-controls="timelineBody">
+            <span class="mobile-panel-toggle-copy">
+              <strong>隊形時間軸</strong>
+              <small id="timelineToggleSummary">0 個隊形</small>
+            </span>
+            <svg class="mobile-panel-chevron"><use href="#icon-chevron-down"></use></svg>
+          </button>
+          <div class="timeline-body" id="timelineBody">
+            <div class="timeline-header">
+              <div>
+                <p class="panel-label">SEQUENCE</p>
+                <h2>隊形時間軸</h2>
+              </div>
+              <button class="secondary-button secondary-button--compact" id="newFormationButton" type="button">
+                <svg><use href="#icon-copy"></use></svg>
+                從目前隊形新增
+              </button>
             </div>
-            <button class="secondary-button secondary-button--compact" id="newFormationButton" type="button">
-              <svg><use href="#icon-copy"></use></svg>
-              從目前隊形新增
-            </button>
+            <div class="formation-track" id="formationTrack"></div>
           </div>
-          <div class="formation-track" id="formationTrack"></div>
         </section>
       </main>
     </div>

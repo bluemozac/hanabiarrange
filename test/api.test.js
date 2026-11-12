@@ -118,6 +118,48 @@ test("project, dancer and formation CRUD workflow", async (t) => {
     y: 21.55
   });
 
+  const thirdFormation = await request(`/api/projects/${projectId}/formations`, {
+    method: "POST",
+    body: JSON.stringify({
+      name: "Arc",
+      transitionSeconds: 2.2,
+      positions: decimalFormation.payload.formation.positions
+    })
+  });
+  assert.equal(thirdFormation.response.status, 201);
+
+  const reordered = await request(`/api/projects/${projectId}/formations/reorder`, {
+    method: "PUT",
+    body: JSON.stringify({
+      formationIds: [
+        thirdFormation.payload.formation.id,
+        firstFormation.id,
+        formationId
+      ]
+    })
+  });
+  assert.equal(reordered.response.status, 200);
+  assert.deepEqual(
+    reordered.payload.formations.map((formation) => formation.name),
+    ["Arc", "第一個隊形", "Line"]
+  );
+  assert.deepEqual(
+    reordered.payload.formations.map((formation) => formation.sequenceIndex),
+    [0, 1, 2]
+  );
+
+  const invalidOrder = await request(`/api/projects/${projectId}/formations/reorder`, {
+    method: "PUT",
+    body: JSON.stringify({
+      formationIds: [
+        thirdFormation.payload.formation.id,
+        thirdFormation.payload.formation.id,
+        firstFormation.id
+      ]
+    })
+  });
+  assert.equal(invalidOrder.response.status, 400);
+
   const pdfResponse = await fetch(`${baseUrl}/api/projects/${projectId}/export.pdf?theme=dark`);
   assert.equal(pdfResponse.status, 200);
   assert.match(pdfResponse.headers.get("content-type"), /^application\/pdf/);
