@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#171b1f" />
+    <title>Hanabi Stage｜舞碼隊形編輯</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <svg class="svg-sprite" aria-hidden="true">
+      <symbol id="icon-plus" viewBox="0 0 24 24">
+        <path d="M5 12h14M12 5v14" />
+      </symbol>
+      <symbol id="icon-play" viewBox="0 0 24 24">
+        <path d="m8 5 11 7-11 7Z" />
+      </symbol>
+      <symbol id="icon-skip-back" viewBox="0 0 24 24">
+        <path d="M19 20 9 12l10-8v16Z" />
+        <path d="M5 19V5" />
+      </symbol>
+      <symbol id="icon-skip-forward" viewBox="0 0 24 24">
+        <path d="m5 4 10 8-10 8V4Z" />
+        <path d="M19 5v14" />
+      </symbol>
+      <symbol id="icon-settings" viewBox="0 0 24 24">
+        <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.86 2.86-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.55v-.09A1.7 1.7 0 0 0 8.5 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.86-2.86.06-.06A1.7 1.7 0 0 0 4.1 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.3V9.55h.1A1.7 1.7 0 0 0 4.1 8.5a1.7 1.7 0 0 0-.34-1.88l-.06-.06L6.56 3.7l.06.06A1.7 1.7 0 0 0 8.5 4.1a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1v-.1h4.05v.1A1.7 1.7 0 0 0 15 4.1a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.86 2.86-.06.06A1.7 1.7 0 0 0 19.4 8.5a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.1v4.05h-.1A1.7 1.7 0 0 0 19.4 15Z" />
+      </symbol>
+      <symbol id="icon-trash" viewBox="0 0 24 24">
+        <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" />
+      </symbol>
+      <symbol id="icon-x" viewBox="0 0 24 24">
+        <path d="m18 6-12 12M6 6l12 12" />
+      </symbol>
+      <symbol id="icon-check" viewBox="0 0 24 24">
+        <path d="m20 6-11 11-5-5" />
+      </symbol>
+      <symbol id="icon-copy" viewBox="0 0 24 24">
+        <rect width="13" height="13" x="9" y="9" rx="2" />
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+      </symbol>
+      <symbol id="icon-chevron-down" viewBox="0 0 24 24">
+        <path d="m6 9 6 6 6-6" />
+      </symbol>
+      <symbol id="icon-moon" viewBox="0 0 24 24">
+        <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z" />
+      </symbol>
+      <symbol id="icon-sun" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+      </symbol>
+      <symbol id="icon-grid" viewBox="0 0 24 24">
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
+      </symbol>
+      <symbol id="icon-download" viewBox="0 0 24 24">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+      </symbol>
+      <symbol id="icon-resize" viewBox="0 0 24 24">
+        <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+      </symbol>
+    </svg>
+
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand-block">
+          <div class="brand-mark">H</div>
+          <div>
+            <div class="brand-name">HANABI STAGE</div>
+            <div class="brand-subtitle">Formation Studio</div>
+          </div>
+        </div>
+
+        <section class="side-section">
+          <div class="section-heading">
+            <span>舞碼專案</span>
+            <button class="icon-button icon-button--light" id="newProjectButton" type="button" title="新增專案" aria-label="新增專案">
+              <svg><use href="#icon-plus"></use></svg>
+            </button>
+          </div>
+          <div class="select-wrap">
+            <select id="projectSelect" aria-label="選擇舞碼專案"></select>
+            <svg class="select-chevron"><use href="#icon-chevron-down"></use></svg>
+          </div>
+          <p class="project-description" id="projectDescription">正在載入專案...</p>
+        </section>
+
+        <section class="side-section side-section--dancers">
+          <div class="section-heading">
+            <span>舞者 <span class="count-badge" id="dancerCount">0</span></span>
+            <button class="icon-button icon-button--light" id="newDancerButton" type="button" title="新增舞者" aria-label="新增舞者">
+              <svg><use href="#icon-plus"></use></svg>
+            </button>
+          </div>
+          <div class="dancer-list" id="dancerList"></div>
+        </section>
+
+        <div class="sidebar-footer">
+          <span class="status-dot"></span>
+          <span id="connectionLabel">SQLite 已連線</span>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="workspace-header">
+          <div class="workspace-title">
+            <p class="eyebrow">CURRENT PROJECT</p>
+            <h1 id="projectTitle">Hanabi Stage</h1>
+          </div>
+          <div class="workspace-actions">
+            <div class="save-state" id="saveState" aria-live="polite">
+              <svg><use href="#icon-check"></use></svg>
+              <span>已同步</span>
+            </div>
+            <button class="text-button export-button" id="exportPdfButton" type="button" title="匯出 PDF" aria-label="匯出 PDF">
+              <svg><use href="#icon-download"></use></svg>
+              <span>匯出 PDF</span>
+            </button>
+            <button class="text-button" id="editProjectButton" type="button">
+              <svg><use href="#icon-settings"></use></svg>
+              舞台設定
+            </button>
+            <button class="icon-button icon-button--danger" id="deleteProjectButton" type="button" title="刪除專案" aria-label="刪除專案">
+              <svg><use href="#icon-trash"></use></svg>
+            </button>
+          </div>
+        </header>
+
+        <div class="workspace-body">
+          <section class="stage-panel">
+            <div class="stage-toolbar">
+              <div>
+                <p class="panel-label">FORMATION PREVIEW</p>
+                <h2 id="stageFormationName">尚未選擇隊形</h2>
+              </div>
+              <div class="stage-toolbar-controls">
+                <button class="icon-button view-toggle" id="stageGridButton" type="button" title="顯示網格" aria-label="顯示網格" aria-pressed="true">
+                  <svg><use href="#icon-grid"></use></svg>
+                </button>
+                <button class="icon-button view-toggle" id="stageThemeButton" type="button" title="使用深色舞台" aria-label="使用深色舞台" aria-pressed="false">
+                  <svg><use id="stageThemeIcon" href="#icon-moon"></use></svg>
+                </button>
+                <div class="stage-dimensions" id="stageDimensions">-- × --</div>
+              </div>
+            </div>
+
+            <div class="canvas-stage-area" id="canvasStageArea">
+              <div class="canvas-frame" id="canvasFrame">
+                <canvas id="stageCanvas" aria-label="舞者隊形編輯舞台"></canvas>
+                <div class="canvas-corner-label">BACK</div>
+                <div class="audience-label">AUDIENCE / 觀眾席</div>
+                <button class="stage-resize-handle" id="stageResizeHandle" type="button" title="拖曳調整舞台顯示大小；雙擊重設" aria-label="拖曳調整舞台顯示大小">
+                  <svg><use href="#icon-resize"></use></svg>
+                </button>
+                <div class="empty-stage" id="emptyStage" hidden>
+                  <div class="empty-stage-mark">+</div>
+                  <strong>建立第一個隊形</strong>
+                  <span>從時間軸新增隊形後即可開始編排</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="transport-bar">
+              <div class="transport-controls">
+                <button class="icon-button" id="previousFormationButton" type="button" title="上一個隊形" aria-label="上一個隊形">
+                  <svg><use href="#icon-skip-back"></use></svg>
+                </button>
+                <button class="play-button" id="playButton" type="button">
+                  <svg><use href="#icon-play"></use></svg>
+                  <span>播放走位</span>
+                </button>
+                <button class="icon-button" id="nextFormationButton" type="button" title="下一個隊形" aria-label="下一個隊形">
+                  <svg><use href="#icon-skip-forward"></use></svg>
+                </button>
+              </div>
+              <div class="transition-readout">
+                <span id="transitionDirection">目前隊形</span>
+                <strong id="transitionTime">2.0s</strong>
+              </div>
+            </div>
+          </section>
+
+          <aside class="inspector">
+            <div class="inspector-tabs">
+              <span class="inspector-tab is-active">隊形</span>
+              <span class="inspector-tab">舞者</span>
+            </div>
+
+            <section class="inspector-section">
+              <div class="inspector-heading">
+                <div>
+                  <p class="panel-label">TIMING</p>
+                  <h3>隊形設定</h3>
+                </div>
+                <div class="inspector-heading-actions">
+                  <span class="sequence-chip" id="formationSequence">--</span>
+                  <button class="icon-button icon-button--danger" id="deleteFormationButton" type="button" title="刪除隊形" aria-label="刪除隊形">
+                    <svg><use href="#icon-trash"></use></svg>
+                  </button>
+                </div>
+              </div>
+              <form id="formationForm" class="stack-form">
+                <label class="field">
+                  <span>隊形名稱</span>
+                  <input id="formationNameInput" name="name" type="text" maxlength="100" required />
+                </label>
+                <label class="field">
+                  <span>進場過渡</span>
+                  <div class="input-with-suffix">
+                    <input id="transitionInput" name="transitionSeconds" type="number" min="0" max="60" step="0.1" required />
+                    <span>秒</span>
+                  </div>
+                </label>
+                <button class="primary-button" type="submit">套用隊形設定</button>
+              </form>
+            </section>
+
+            <section class="inspector-section inspector-section--dancer">
+              <div class="inspector-heading">
+                <div>
+                  <p class="panel-label">DANCER</p>
+                  <h3 id="selectedDancerTitle">未選取舞者</h3>
+                </div>
+                <button class="icon-button icon-button--danger" id="deleteDancerButton" type="button" title="刪除舞者" aria-label="刪除舞者" disabled>
+                  <svg><use href="#icon-trash"></use></svg>
+                </button>
+              </div>
+              <form id="dancerForm" class="stack-form">
+                <div class="field-row">
+                  <label class="field">
+                    <span>代號</span>
+                    <input id="dancerCodeInput" name="code" type="text" maxlength="20" disabled />
+                  </label>
+                  <label class="field">
+                    <span>顏色</span>
+                    <input id="dancerColorInput" name="color" class="color-input" type="color" disabled />
+                  </label>
+                </div>
+                <label class="field">
+                  <span>名稱</span>
+                  <input id="dancerNameInput" name="name" type="text" maxlength="80" disabled />
+                </label>
+                <div class="coordinate-row">
+                  <label class="coordinate-field">
+                    <span>X 座標</span>
+                  <input id="dancerXInput" type="number" min="0" step="0.01" disabled />
+                  </label>
+                  <label class="coordinate-field">
+                    <span>Y 座標</span>
+                  <input id="dancerYInput" type="number" min="0" step="0.01" disabled />
+                  </label>
+                </div>
+                <button class="secondary-button" id="saveDancerButton" type="submit" disabled>儲存舞者資料</button>
+              </form>
+            </section>
+
+            <div class="inspector-stats">
+              <div>
+                <span>隊形總數</span>
+                <strong id="formationCount">0</strong>
+              </div>
+              <div>
+                <span>演出總長</span>
+                <strong id="totalDuration">0.0s</strong>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <section class="timeline">
+          <div class="timeline-header">
+            <div>
+              <p class="panel-label">SEQUENCE</p>
+              <h2>隊形時間軸</h2>
+            </div>
+            <button class="secondary-button secondary-button--compact" id="newFormationButton" type="button">
+              <svg><use href="#icon-copy"></use></svg>
+              從目前隊形新增
+            </button>
+          </div>
+          <div class="formation-track" id="formationTrack"></div>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="modal" id="projectDialog">
+      <form id="projectForm" class="modal-form">
+        <div class="modal-header">
+          <div>
+            <p class="panel-label">PROJECT</p>
+            <h2 id="projectDialogTitle">新增舞碼專案</h2>
+          </div>
+          <button class="icon-button modal-close" type="button" data-close-dialog="projectDialog" title="關閉" aria-label="關閉">
+            <svg><use href="#icon-x"></use></svg>
+          </button>
+        </div>
+        <input id="projectIdInput" type="hidden" />
+        <label class="field">
+          <span>專案名稱</span>
+          <input id="projectNameInput" type="text" maxlength="100" placeholder="例如：舞團成發 Opening" required />
+        </label>
+        <label class="field">
+          <span>專案說明</span>
+          <textarea id="projectDescriptionInput" maxlength="500" rows="3" placeholder="排練版本、演出場合或備註"></textarea>
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>舞台比例</span>
+            <select id="stageRatioSelect">
+              <option value="16:9">16 : 9</option>
+              <option value="4:3">4 : 3</option>
+              <option value="1:1">1 : 1</option>
+              <option value="custom">自訂</option>
+            </select>
+          </label>
+          <div class="ratio-fields">
+            <label class="field">
+              <span>寬度</span>
+              <input id="stageWidthInput" type="number" min="10" max="1000" step="0.01" value="100" required />
+            </label>
+            <span class="ratio-times">×</span>
+            <label class="field">
+              <span>高度</span>
+              <input id="stageHeightInput" type="number" min="10" max="1000" step="0.01" value="56.25" required />
+            </label>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="ghost-button" type="button" data-close-dialog="projectDialog">取消</button>
+          <button class="primary-button" type="submit">儲存專案</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="dancerDialog">
+      <form id="dancerDialogForm" class="modal-form">
+        <div class="modal-header">
+          <div>
+            <p class="panel-label">DANCER</p>
+            <h2>新增舞者</h2>
+          </div>
+          <button class="icon-button modal-close" type="button" data-close-dialog="dancerDialog" title="關閉" aria-label="關閉">
+            <svg><use href="#icon-x"></use></svg>
+          </button>
+        </div>
+        <div class="field-row">
+          <label class="field">
+            <span>舞者代號</span>
+            <input id="newDancerCode" type="text" maxlength="20" placeholder="A1" required />
+          </label>
+          <label class="field">
+            <span>代表顏色</span>
+            <input id="newDancerColor" class="color-input" type="color" value="#f97316" />
+          </label>
+        </div>
+        <label class="field">
+          <span>舞者名稱</span>
+          <input id="newDancerName" type="text" maxlength="80" placeholder="選填" />
+        </label>
+        <div class="modal-actions">
+          <button class="ghost-button" type="button" data-close-dialog="dancerDialog">取消</button>
+          <button class="primary-button" type="submit">新增舞者</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast-region" id="toastRegion" aria-live="polite"></div>
+    <div class="loading-screen" id="loadingScreen">
+      <div class="loading-mark">H</div>
+      <span>載入舞台資料</span>
+    </div>
+
+    <script type="module" src="/js/app.js"></script>
+  </body>
+</html>
