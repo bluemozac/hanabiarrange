@@ -173,6 +173,47 @@ test("project, dancer and formation CRUD workflow", async (t) => {
     }
   ]);
 
+  const duplicatedProject = await request(`/api/projects/${projectId}/duplicate`, {
+    method: "POST"
+  });
+  assert.equal(duplicatedProject.response.status, 201);
+  const duplicate = duplicatedProject.payload.project;
+  assert.notEqual(duplicate.id, projectId);
+  assert.equal(duplicate.name, "API Test Project 副本");
+  assert.equal(duplicate.stageWidth, 100);
+  assert.equal(duplicate.stageHeight, 60);
+  assert.equal(duplicate.dancers.length, 2);
+  assert.deepEqual(
+    duplicate.dancers.map((dancer) => dancer.code),
+    ["A1", "B1"]
+  );
+  assert.ok(
+    duplicate.dancers.every(
+      (dancer) => !projectAfterDancers.payload.project.dancers.some(
+        (source) => source.id === dancer.id
+      )
+    )
+  );
+  const duplicateLine = duplicate.formations.find((formation) => formation.name === "Line");
+  const duplicateDancerIds = new Set(duplicate.dancers.map((dancer) => String(dancer.id)));
+  assert.ok(
+    Object.keys(duplicateLine.positions).every((dancerId) => duplicateDancerIds.has(dancerId))
+  );
+  assert.deepEqual(duplicateLine.annotations, [
+    {
+      id: "note-2",
+      text: "第二拍轉身",
+      x: 50,
+      y: 8,
+      color: "#0ea5e9",
+      fontSize: 18
+    }
+  ]);
+  const deletedDuplicate = await request(`/api/projects/${duplicate.id}`, {
+    method: "DELETE"
+  });
+  assert.equal(deletedDuplicate.response.status, 204);
+
   const thirdFormation = await request(`/api/projects/${projectId}/formations`, {
     method: "POST",
     body: JSON.stringify({

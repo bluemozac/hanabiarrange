@@ -5,6 +5,7 @@
 ## 已實作功能
 
 - 舞碼專案的新增、讀取、編輯與刪除
+- 一鍵完整複製專案、舞者、隊形、座標與注解
 - 16:9、4:3、1:1 與自訂舞台尺寸
 - 舞者代號、名稱、代表顏色的管理
 - 多隊形時間軸與進場過渡秒數
@@ -144,6 +145,7 @@ sudo systemctl reload nginx
 | `GET` | `/api/health/pdf` | 檢查 PDF 中文字型是否可用 |
 | `GET` | `/api/projects` | 專案列表 |
 | `POST` | `/api/projects` | 新增專案與第一個隊形 |
+| `POST` | `/api/projects/:projectId/duplicate` | 完整複製專案 |
 | `GET` | `/api/projects/:projectId` | 專案、舞者與隊形完整資料 |
 | `GET` | `/api/projects/:projectId/export.pdf?mode=full` | 匯出完整專案 PDF |
 | `GET` | `/api/projects/:projectId/export.pdf?mode=simple` | 匯出隊形名稱與舞台排位圖 |

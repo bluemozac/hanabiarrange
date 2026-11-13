@@ -47,6 +47,10 @@ export const api = {
     });
   },
 
+  duplicateProject(projectId) {
+    return request(`/api/projects/${projectId}/duplicate`, { method: "POST" });
+  },
+
   deleteProject(projectId) {
     return request(`/api/projects/${projectId}`, { method: "DELETE" });
   },

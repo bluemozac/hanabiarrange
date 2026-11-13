@@ -46,6 +46,75 @@ function createProjectsRouter(db) {
     response.status(201).json({ project: getProject(db, projectId) });
   });
 
+  router.post("/:projectId/duplicate", (request, response) => {
+    const sourceId = parseId(request.params.projectId, "專案 ID");
+    const source = getProject(db, sourceId);
+    if (!source) {
+      response.status(404).json({ error: "找不到舞碼專案" });
+      return;
+    }
+
+    const suffix = " 副本";
+    const duplicateName = `${source.name
+      .slice(0, 100 - suffix.length)
+      .trimEnd()}${suffix}`;
+
+    const duplicate = db.transaction(() => {
+      const project = db
+        .prepare(
+          `INSERT INTO projects (name, description, stage_width, stage_height)
+           VALUES (?, ?, ?, ?)`
+        )
+        .run(
+          duplicateName,
+          source.description,
+          source.stageWidth,
+          source.stageHeight
+        );
+      const projectId = Number(project.lastInsertRowid);
+      const dancerIdMap = new Map();
+      const insertDancer = db.prepare(
+        `INSERT INTO dancers (project_id, code, name, color, sort_order)
+         VALUES (?, ?, ?, ?, ?)`
+      );
+      for (const dancer of source.dancers) {
+        const result = insertDancer.run(
+          projectId,
+          dancer.code,
+          dancer.name,
+          dancer.color,
+          dancer.sortOrder
+        );
+        dancerIdMap.set(dancer.id, Number(result.lastInsertRowid));
+      }
+
+      const insertFormation = db.prepare(
+        `INSERT INTO formations
+           (project_id, name, sequence_index, transition_seconds, positions_json, annotations_json)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      );
+      for (const formation of source.formations) {
+        const positions = {};
+        for (const [oldDancerId, position] of Object.entries(formation.positions)) {
+          const newDancerId = dancerIdMap.get(Number(oldDancerId));
+          if (newDancerId) positions[String(newDancerId)] = position;
+        }
+        insertFormation.run(
+          projectId,
+          formation.name,
+          formation.sequenceIndex,
+          formation.transitionSeconds,
+          JSON.stringify(positions),
+          JSON.stringify(formation.annotations ?? [])
+        );
+      }
+      return projectId;
+    });
+
+    const projectId = duplicate();
+    response.status(201).json({ project: getProject(db, projectId) });
+  });
+
   router.get("/:projectId/export.pdf", async (request, response, next) => {
     try {
       const projectId = parseId(request.params.projectId, "專案 ID");

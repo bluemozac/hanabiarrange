@@ -71,6 +71,7 @@ const elements = {
   newDancerName: $("#newDancerName"),
   newDancerColor: $("#newDancerColor"),
   exportPdfButton: $("#exportPdfButton"),
+  duplicateProjectButton: $("#duplicateProjectButton"),
   exportDialog: $("#exportDialog"),
   exportForm: $("#exportForm"),
   annotationDialog: $("#annotationDialog"),
@@ -163,6 +164,7 @@ function bindEvents() {
     if (state.project) openProjectDialog(state.project);
   });
   $("#deleteProjectButton").addEventListener("click", deleteProject);
+  elements.duplicateProjectButton.addEventListener("click", duplicateCurrentProject);
   $("#newDancerButton").addEventListener("click", openDancerDialog);
   $("#newFormationButton").addEventListener("click", createFormationFromCurrent);
   elements.exportPdfButton.addEventListener("click", openExportDialog);
@@ -302,6 +304,7 @@ function renderProjectMeta() {
 
   $("#editProjectButton").disabled = !project;
   $("#deleteProjectButton").disabled = !project;
+  elements.duplicateProjectButton.disabled = !project;
   $("#newDancerButton").disabled = !project;
   elements.exportPdfButton.disabled = !project;
 }
@@ -860,6 +863,26 @@ async function deleteProject() {
     showToast(`專案 ${deletedId} 已刪除`);
   } catch (error) {
     showError(error);
+  }
+}
+
+async function duplicateCurrentProject() {
+  if (!state.project) return;
+  const sourceId = state.project.id;
+  const label = elements.duplicateProjectButton.querySelector("span");
+  const previousLabel = label.textContent;
+  elements.duplicateProjectButton.disabled = true;
+  label.textContent = "複製中...";
+  try {
+    const payload = await api.duplicateProject(sourceId);
+    await refreshProjects(payload.project.id);
+    await loadProject(payload.project.id);
+    showToast(`已建立「${payload.project.name}」`);
+  } catch (error) {
+    showError(error);
+  } finally {
+    label.textContent = previousLabel || "複製專案";
+    elements.duplicateProjectButton.disabled = !state.project;
   }
 }
 
