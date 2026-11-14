@@ -205,6 +205,7 @@ function createProjectsRouter(db) {
     });
     update();
 
+    request.app.locals.realtime?.broadcastProjectChanged(projectId, "project-updated");
     response.json({ project: getProject(db, projectId) });
   });
 

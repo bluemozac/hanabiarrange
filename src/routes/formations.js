@@ -82,6 +82,7 @@ function createFormationsRouter(db) {
     });
 
     const formationId = create();
+    request.app.locals.realtime?.broadcastProjectChanged(project.id, "formation-created");
     response.status(201).json({
       formation: mapFormation(db.prepare("SELECT * FROM formations WHERE id = ?").get(formationId))
     });
@@ -126,6 +127,10 @@ function createFormationsRouter(db) {
       .prepare("SELECT * FROM formations WHERE project_id = ? ORDER BY sequence_index, id")
       .all(project.id)
       .map(mapFormation);
+    request.app.locals.realtime?.broadcastProjectChanged(
+      project.id,
+      "formations-reordered"
+    );
     response.json({ formations });
   });
 
@@ -178,11 +183,11 @@ function createFormationsRouter(db) {
     );
     touchProject(db, project.id);
 
-    response.json({
-      formation: mapFormation(
-        db.prepare("SELECT * FROM formations WHERE id = ?").get(formationId)
-      )
-    });
+    const formation = mapFormation(
+      db.prepare("SELECT * FROM formations WHERE id = ?").get(formationId)
+    );
+    request.app.locals.realtime?.broadcastFormationUpdate(project.id, formation);
+    response.json({ formation });
   });
 
   router.delete("/:formationId", (request, response) => {
@@ -212,6 +217,7 @@ function createFormationsRouter(db) {
       touchProject(db, project.id);
     });
     remove();
+    request.app.locals.realtime?.broadcastProjectChanged(project.id, "formation-deleted");
     response.status(204).end();
   });
 

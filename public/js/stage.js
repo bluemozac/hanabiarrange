@@ -11,6 +11,8 @@ export class StageCanvas {
     this.displayPositions = {};
     this.annotations = [];
     this.annotationLayouts = [];
+    this.remoteDancers = new Map();
+    this.remoteAnnotations = new Map();
     this.selectedDancerId = null;
     this.selectedAnnotationId = null;
     this.draggingDancerId = null;
@@ -98,6 +100,51 @@ export class StageCanvas {
     annotation.x = position.x;
     annotation.y = position.y;
     this.draw();
+  }
+
+  setRemoteDancerPosition(dancerId, position, user) {
+    this.setRemotePosition(this.remoteDancers, String(dancerId), position, user);
+  }
+
+  setRemoteAnnotationPosition(annotationId, position, user) {
+    this.setRemotePosition(this.remoteAnnotations, String(annotationId), position, user);
+  }
+
+  setRemotePosition(collection, key, position, user) {
+    const existing = collection.get(key);
+    if (existing?.timer) window.clearTimeout(existing.timer);
+    const timer = window.setTimeout(() => {
+      collection.delete(key);
+      this.updateRemoteState();
+      this.draw();
+    }, 2200);
+    collection.set(key, {
+      position: { x: Number(position.x), y: Number(position.y) },
+      user,
+      timer
+    });
+    this.updateRemoteState();
+    this.draw();
+  }
+
+  clearRemotePositions() {
+    for (const collection of [this.remoteDancers, this.remoteAnnotations]) {
+      for (const entry of collection.values()) {
+        if (entry.timer) window.clearTimeout(entry.timer);
+      }
+      collection.clear();
+    }
+    this.updateRemoteState();
+    this.draw();
+  }
+
+  updateRemoteState() {
+    this.canvas.dataset.remoteActive =
+      this.remoteDancers.size + this.remoteAnnotations.size > 0 ? "true" : "false";
+  }
+
+  isInteracting() {
+    return Boolean(this.draggingDancerId || this.draggingAnnotationId);
   }
 
   setTheme(theme) {
@@ -616,6 +663,30 @@ export class StageCanvas {
         height
       });
     }
+
+    for (const remote of this.remoteAnnotations.values()) {
+      const point = this.stageToScreen(
+        remote.position.x,
+        remote.position.y
+      );
+      context.save();
+      context.setLineDash([4, 3]);
+      context.lineWidth = 2;
+      context.strokeStyle = remote.user.color;
+      context.beginPath();
+      context.arc(point.x, point.y, 18, 0, TAU);
+      context.stroke();
+      context.setLineDash([]);
+      context.fillStyle = remote.user.color;
+      context.font = '700 8px "Aptos", "Segoe UI", sans-serif';
+      context.textAlign = "center";
+      context.fillText(
+        truncateLabel(remote.user.name, 12),
+        point.x,
+        point.y - 23
+      );
+      context.restore();
+    }
   }
 
   drawFloor() {
@@ -733,6 +804,46 @@ export class StageCanvas {
     }
     const selected = this.dancers.find((dancer) => dancer.id === this.selectedDancerId);
     if (selected) this.drawDancer(selected, radius, true);
+    this.drawRemoteDancers(radius);
+  }
+
+  drawRemoteDancers(radius) {
+    const context = this.context;
+    for (const [dancerId, remote] of this.remoteDancers) {
+      const dancer = this.dancers.find((item) => String(item.id) === dancerId);
+      if (!dancer) continue;
+      const point = this.stageToScreen(remote.position.x, remote.position.y);
+      context.save();
+      context.setLineDash([3, 3]);
+      context.lineWidth = 2.5;
+      context.strokeStyle = remote.user.color;
+      context.fillStyle = hexToRgba(dancer.color, 0.76);
+      context.beginPath();
+      context.arc(point.x, point.y, radius + 3, 0, TAU);
+      context.fill();
+      context.stroke();
+      context.setLineDash([]);
+      context.fillStyle = remote.user.color;
+      roundedRect(
+        context,
+        point.x - Math.min(56, Math.max(28, remote.user.name.length * 5.5)),
+        point.y - radius - 19,
+        Math.min(112, Math.max(56, remote.user.name.length * 11)),
+        15,
+        3
+      );
+      context.fill();
+      context.fillStyle = "#ffffff";
+      context.font = '700 8px "Aptos", "Segoe UI", sans-serif';
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText(
+        truncateLabel(remote.user.name, 12),
+        point.x,
+        point.y - radius - 11.5
+      );
+      context.restore();
+    }
   }
 
   drawDancer(dancer, radius, selected) {

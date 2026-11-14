@@ -1,4 +1,5 @@
 import { api } from "./api.js";
+import { CollaborationClient } from "./realtime.js";
 import { StageCanvas } from "./stage.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -7,6 +8,7 @@ const STAGE_THEME_KEY = "hanabi-stage-theme";
 const STAGE_GRID_KEY = "hanabi-stage-grid";
 const STAGE_SIZE_KEY = "hanabi-stage-size";
 const PANEL_LAYOUT_KEY = "hanabi-panel-layout";
+const COLLAB_USER_KEY = "hanabi-collaboration-user";
 const mobileLayout = window.matchMedia("(max-width: 720px)");
 
 const elements = {
@@ -17,6 +19,7 @@ const elements = {
   dancerList: $("#dancerList"),
   connectionLabel: $("#connectionLabel"),
   saveState: $("#saveState"),
+  collaboratorPresence: $("#collaboratorPresence"),
   stageFormationName: $("#stageFormationName"),
   stageDimensions: $("#stageDimensions"),
   stagePanel: $("#stagePanel"),
@@ -103,8 +106,19 @@ const state = {
   gridVisible: readPreference(STAGE_GRID_KEY, "true") !== "false"
 };
 
+const collaborationUser = createCollaborationUser();
+const collaboration = new CollaborationClient({
+  onPresence: (users) => renderCollaborators(users),
+  onDrag: (message) => handleRemoteDrag(message),
+  onFormationUpdate: (formation) => handleRemoteFormationUpdate(formation),
+  onProjectChanged: (reason) => scheduleRealtimeProjectReload(reason),
+  onStatus: (status) => {
+    elements.collaboratorPresence.dataset.status = status;
+  }
+});
+
 let formationSaveTimer = null;
-let pendingFormationSaveId = null;
+const pendingPositionChanges = new Map();
 let stageResizeState = null;
 let formationDragState = null;
 let annotationSaveTimer = null;
@@ -188,6 +202,7 @@ function bindEvents() {
   elements.stageResizeHandle.addEventListener("dblclick", resetStageSize);
   window.addEventListener("resize", clampStageFrame);
   window.addEventListener("resize", clampPanelLayout);
+  window.addEventListener("beforeunload", () => collaboration.disconnect());
   bindPanelResizers();
   mobileLayout.addEventListener("change", initializeMobilePanels);
   elements.inspectorToggle.addEventListener("click", () => toggleMobilePanel("inspector"));
@@ -505,6 +520,13 @@ async function loadProject(projectId, preferredFormationId = null, preferredDanc
     stage.setSelectedDancer(state.selectedDancerId);
     stage.setSelectedAnnotation(null);
     stage.setFormation(selectedFormation());
+    if (state.selectedFormationId) {
+      collaboration.connect(
+        state.project.id,
+        state.selectedFormationId,
+        collaborationUser
+      );
+    }
     setSaveState("saved", "已同步");
   } catch (error) {
     showError(error);
@@ -837,6 +859,7 @@ function handleAnnotationPositionChange(annotationId, position) {
   if (!annotation) return;
   annotation.x = position.x;
   annotation.y = position.y;
+  collaboration.sendDrag(formation.id, { annotationId, position });
 }
 
 function handleAnnotationPositionCommit(annotationId, position) {
@@ -888,6 +911,88 @@ function createAnnotationId() {
     `note-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function renderCollaborators(users) {
+  const formationUsers = users.filter(
+    (user) => user.formationId === state.selectedFormationId
+  );
+  const displayUsers = formationUsers.length > 0 ? formationUsers : [collaborationUser];
+  const visibleUsers = displayUsers.slice(0, 4);
+  elements.collaboratorPresence.innerHTML = visibleUsers
+    .map((user) => {
+      const isSelf = user.id === collaborationUser.id;
+      const title = `${escapeHtml(user.name)}${isSelf ? "（你）" : ""}`;
+      return `<span class="collaborator-avatar" style="background:${safeColor(user.color)}" title="${title}">${escapeHtml(user.name.slice(-2))}</span>`;
+    })
+    .join("") +
+    (displayUsers.length > visibleUsers.length
+      ? `<span class="collaborator-count">+${displayUsers.length - visibleUsers.length}</span>`
+      : "");
+  elements.collaboratorPresence.title =
+    `${displayUsers.length} 人正在編輯此隊形`;
+}
+
+function handleRemoteDrag(message) {
+  if (
+    message.formationId !== state.selectedFormationId ||
+    message.user?.id === collaborationUser.id
+  ) {
+    return;
+  }
+  if (message.dancerId) {
+    stage.setRemoteDancerPosition(message.dancerId, message.position, message.user);
+  } else if (message.annotationId) {
+    stage.setRemoteAnnotationPosition(
+      message.annotationId,
+      message.position,
+      message.user
+    );
+  }
+}
+
+function handleRemoteFormationUpdate(formation) {
+  if (!state.project) return;
+  const index = state.project.formations.findIndex((item) => item.id === formation.id);
+  if (index < 0) return;
+  const merged = {
+    ...formation,
+    positions: { ...formation.positions },
+    annotations: [...(formation.annotations ?? [])]
+  };
+  const pending = pendingPositionChanges.get(formation.id);
+  if (pending) {
+    for (const [dancerId, position] of pending) {
+      merged.positions[String(dancerId)] = { ...position };
+    }
+  }
+  state.project.formations[index] = merged;
+  if (formation.id === state.selectedFormationId) {
+    stage.clearRemotePositions();
+    if (!stage.isInteracting()) {
+      stage.setFormation(merged);
+      stage.setSelectedDancer(state.selectedDancerId);
+      stage.setSelectedAnnotation(state.selectedAnnotationId);
+    }
+    renderDancerList();
+    renderFormationTrack();
+    renderTransport();
+    renderStats();
+  }
+}
+
+let realtimeReloadTimer = null;
+function scheduleRealtimeProjectReload() {
+  if (realtimeReloadTimer) window.clearTimeout(realtimeReloadTimer);
+  realtimeReloadTimer = window.setTimeout(async () => {
+    realtimeReloadTimer = null;
+    if (!state.project || stage.isInteracting()) return;
+    await loadProject(
+      state.project.id,
+      state.selectedFormationId,
+      state.selectedDancerId
+    );
+  }, 350);
+}
+
 function selectFormation(formationId) {
   if (state.isPlaying) return;
   const formation = state.project?.formations.find((item) => item.id === formationId);
@@ -899,6 +1004,7 @@ function selectFormation(formationId) {
   stage.setSelectedDancer(null);
   stage.setFormation(formation);
   stage.setSelectedAnnotation(null);
+  collaboration.join(state.project.id, formation.id);
   renderDancerList();
   renderFormationTrack();
   renderFormationInspector();
@@ -922,6 +1028,7 @@ function handlePositionChange(dancerId, position) {
   const formation = selectedFormation();
   if (!formation) return;
   formation.positions[String(dancerId)] = { ...position };
+  collaboration.sendDrag(formation.id, { dancerId, position });
   if (dancerId === state.selectedDancerId) {
     elements.dancerXInput.value = formatNumber(position.x);
     elements.dancerYInput.value = formatNumber(position.y);
@@ -933,40 +1040,57 @@ function saveDancerPosition(dancerId, position) {
   const formation = selectedFormation();
   if (!formation || !state.project || !position) return;
   formation.positions[String(dancerId)] = { ...position };
-  scheduleFormationPositionSave(formation.id);
+  queueFormationPositionSave(formation.id, dancerId, position);
 }
 
-function scheduleFormationPositionSave(formationId) {
+function queueFormationPositionSave(formationId, dancerId, position) {
   if (!state.project || !formationId) return;
+  if (!pendingPositionChanges.has(formationId)) {
+    pendingPositionChanges.set(formationId, new Map());
+  }
+  pendingPositionChanges.get(formationId).set(dancerId, { ...position });
   if (formationSaveTimer) clearTimeout(formationSaveTimer);
-  pendingFormationSaveId = formationId;
   setSaveState("saving", "儲存中");
   formationSaveTimer = window.setTimeout(() => {
     formationSaveTimer = null;
-    persistFormationPositions(formationId);
+    persistPendingPositions();
   }, 220);
 }
 
-async function persistFormationPositions(formationId) {
+async function persistPendingPositions() {
   const project = state.project;
-  const formation = project?.formations.find((item) => item.id === formationId);
-  if (!project || !formation) return;
-
-  const snapshot = JSON.parse(JSON.stringify(formation.positions));
+  if (!project || pendingPositionChanges.size === 0) return;
+  const batches = [...pendingPositionChanges.entries()];
+  pendingPositionChanges.clear();
   try {
-    const payload = await api.updateFormation(project.id, formation.id, {
-      positions: snapshot
-    });
-    const current = state.project?.formations.find((item) => item.id === formationId);
-    if (
-      current &&
-      JSON.stringify(current.positions) === JSON.stringify(snapshot)
-    ) {
-      current.positions = payload.formation.positions;
+    for (const [formationId, changes] of batches) {
+      const positions = Object.fromEntries(
+        [...changes.entries()].map(([dancerId, position]) => [
+          String(dancerId),
+          position
+        ])
+      );
+      const payload = await api.updateFormation(project.id, formationId, {
+        positions
+      });
+      const current = state.project?.formations.find(
+        (item) => item.id === formationId
+      );
+      if (!current) continue;
+      for (const [dancerId, sentPosition] of changes) {
+        const localPosition = current.positions[String(dancerId)];
+        if (
+          localPosition &&
+          localPosition.x === sentPosition.x &&
+          localPosition.y === sentPosition.y
+        ) {
+          current.positions[String(dancerId)] =
+            payload.formation.positions[String(dancerId)];
+        }
+      }
       current.updatedAt = payload.formation.updatedAt;
     }
-    if (!formationSaveTimer && pendingFormationSaveId === formationId) {
-      pendingFormationSaveId = null;
+    if (!formationSaveTimer && pendingPositionChanges.size === 0) {
       setSaveState("saved", "已儲存");
     }
   } catch (error) {
@@ -995,7 +1119,7 @@ function updateDancerFromCoordinates() {
   stage.updateDancerPosition(dancer.id, position);
   renderDancerInspector();
   renderDancerList();
-  scheduleFormationPositionSave(formation.id);
+  queueFormationPositionSave(formation.id, dancer.id, position);
 }
 
 async function playCurrentTransition() {
@@ -1187,7 +1311,7 @@ async function submitDancerEdit(event) {
     Object.assign(dancer, payload.dancer);
     formation.positions[String(dancer.id)] = position;
     stage.updateDancerPosition(dancer.id, position);
-    scheduleFormationPositionSave(formation.id);
+    queueFormationPositionSave(formation.id, dancer.id, position);
     stage.setProject(state.project);
     renderDancerList();
     renderDancerInspector();
@@ -1784,6 +1908,44 @@ function writePreference(key, value) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function createCollaborationUser() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(COLLAB_USER_KEY) || "null");
+    if (
+      saved?.id &&
+      saved?.name &&
+      /^#[0-9a-f]{6}$/i.test(saved.color)
+    ) {
+      return saved;
+    }
+  } catch {
+    // Session storage can be unavailable in privacy-restricted contexts.
+  }
+
+  const id =
+    globalThis.crypto?.randomUUID?.() ??
+    `user-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const palette = [
+    "#0ea5e9",
+    "#14b8a6",
+    "#ec4899",
+    "#8b5cf6",
+    "#22c55e",
+    "#f59e0b"
+  ];
+  const user = {
+    id,
+    name: `訪客 ${id.slice(-4).toUpperCase()}`,
+    color: palette[Math.floor(Math.random() * palette.length)]
+  };
+  try {
+    sessionStorage.setItem(COLLAB_USER_KEY, JSON.stringify(user));
+  } catch {
+    // The collaboration session still works without persisted identity.
+  }
+  return user;
 }
 
 function safeColor(value) {

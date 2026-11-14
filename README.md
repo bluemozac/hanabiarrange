@@ -12,6 +12,7 @@
 - 時間軸隊形可透過拖曳把手調整演出順序
 - Canvas 滑鼠／觸控拖曳；手機單指可上下捲動頁面及左右平移放大舞台，雙指可縮放與平移
 - 每個隊形可加入、編輯、刪除及拖曳文字注解
+- 同專案、同隊形的多人即時協作、線上名單與遠端拖曳預覽
 - 舞台顯示尺寸可拖曳調整，超出自動顯示雙向捲軸
 - 桌面版左右面板與底部時間軸可拖曳調整大小，並自動記住尺寸
 - 時間軸固定在視窗底部
@@ -111,6 +112,15 @@ curl https://stage.example.com/api/health/pdf
 ```
 
 正常結果應包含 `"available": true` 與 `"source": "bundled"`。
+
+即時協作使用 `/ws` WebSocket。nginx 必須轉送 `Upgrade` 與 `Connection` header，範例設定已包含：
+
+```nginx
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection $connection_upgrade;
+```
+
+瀏覽器會依目前網址自動使用 `ws://` 或 `wss://`，不需要另外設定 localhost 或雲端網址。
 
 nginx 範例位於 [`deploy/nginx.conf.example`](deploy/nginx.conf.example)。設定時將 `server_name` 換成你的網域，啟用後執行：
 

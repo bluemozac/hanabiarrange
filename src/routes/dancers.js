@@ -77,6 +77,7 @@ function createDancersRouter(db) {
     const dancer = db
       .prepare("SELECT * FROM dancers WHERE id = ? AND project_id = ?")
       .get(dancerId, project.id);
+    request.app.locals.realtime?.broadcastProjectChanged(project.id, "dancers-changed");
     response.status(201).json({ dancer: mapDancer(dancer) });
   });
 
@@ -99,6 +100,7 @@ function createDancersRouter(db) {
        WHERE id = ?`
     ).run(code, name, color, dancerId);
     touchProject(db, project.id);
+    request.app.locals.realtime?.broadcastProjectChanged(project.id, "dancers-changed");
 
     response.json({
       dancer: mapDancer(db.prepare("SELECT * FROM dancers WHERE id = ?").get(dancerId))
@@ -131,6 +133,7 @@ function createDancersRouter(db) {
       touchProject(db, project.id);
     });
     remove();
+    request.app.locals.realtime?.broadcastProjectChanged(project.id, "dancers-changed");
     response.status(204).end();
   });
 

@@ -417,6 +417,38 @@ svg {
   height: 14px;
 }
 
+.collaborator-presence {
+  display: flex;
+  min-width: 24px;
+  align-items: center;
+  margin-right: 2px;
+}
+
+.collaborator-avatar {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  margin-left: -5px;
+  place-items: center;
+  color: #fff;
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  box-shadow: 0 2px 7px rgba(20, 23, 21, 0.16);
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.collaborator-avatar:first-child {
+  margin-left: 0;
+}
+
+.collaborator-count {
+  margin-left: 5px;
+  color: #777b76;
+  font-size: 9px;
+  font-weight: 650;
+}
+
 .text-button,
 .primary-button,
 .secondary-button,
@@ -1706,6 +1738,19 @@ body.is-resizing-panels .panel-resizer:active::after {
   }
 
   .save-state {
+    display: none;
+  }
+
+  .collaborator-presence {
+    margin-right: 0;
+  }
+
+  .collaborator-avatar {
+    width: 31px;
+    height: 31px;
+  }
+
+  .collaborator-count {
     display: none;
   }
 

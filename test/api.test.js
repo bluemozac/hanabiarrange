@@ -143,6 +143,27 @@ test("project, dancer and formation CRUD workflow", async (t) => {
     y: 21.55
   });
 
+  const partialPositionUpdate = await request(
+    `/api/projects/${projectId}/formations/${formationId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        positions: {
+          [firstDancer.payload.dancer.id]: { x: 12.34, y: 18.76 }
+        }
+      })
+    }
+  );
+  assert.equal(partialPositionUpdate.response.status, 200);
+  assert.deepEqual(
+    partialPositionUpdate.payload.formation.positions[firstDancer.payload.dancer.id],
+    { x: 12.34, y: 18.76 }
+  );
+  assert.deepEqual(
+    partialPositionUpdate.payload.formation.positions[secondDancer.payload.dancer.id],
+    { x: 80, y: 30 }
+  );
+
   const updatedAnnotations = await request(
     `/api/projects/${projectId}/formations/${formationId}`,
     {
