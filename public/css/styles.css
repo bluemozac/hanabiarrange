@@ -13,6 +13,9 @@
   --success: #218c74;
   --danger: #b73c3c;
   --shadow: 0 18px 45px rgba(29, 30, 28, 0.1);
+  --sidebar-width: 286px;
+  --inspector-width: 286px;
+  --timeline-height: 168px;
   color-scheme: light;
   font-family: "Aptos", "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
 }
@@ -34,6 +37,18 @@ body {
     radial-gradient(circle at 80% 8%, rgba(191, 232, 221, 0.46), transparent 27rem),
     var(--paper);
   overflow: hidden;
+}
+
+body.is-resizing-panels {
+  user-select: none;
+}
+
+body.is-resizing-panels[data-panel-resize="vertical"] {
+  cursor: col-resize;
+}
+
+body.is-resizing-panels[data-panel-resize="horizontal"] {
+  cursor: row-resize;
 }
 
 button,
@@ -78,12 +93,13 @@ svg {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 286px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   width: 100%;
   height: 100%;
 }
 
 .sidebar {
+  position: relative;
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -334,7 +350,7 @@ svg {
   min-width: 0;
   min-height: 0;
   height: 100vh;
-  grid-template-rows: 84px minmax(0, 1fr) 168px;
+  grid-template-rows: 84px minmax(0, 1fr) var(--timeline-height);
   overflow: hidden;
 }
 
@@ -488,7 +504,7 @@ svg {
   display: grid;
   min-width: 0;
   min-height: 0;
-  grid-template-columns: minmax(0, 1fr) 286px;
+  grid-template-columns: minmax(0, 1fr) var(--inspector-width);
   overflow: hidden;
 }
 
@@ -880,6 +896,7 @@ svg {
 }
 
 .inspector {
+  position: relative;
   display: flex;
   min-height: 0;
   flex-direction: column;
@@ -1084,6 +1101,7 @@ svg {
 }
 
 .timeline {
+  position: relative;
   min-width: 0;
   min-height: 0;
   padding: 16px 26px 18px;
@@ -1305,6 +1323,65 @@ svg {
   box-shadow: 0 28px 80px rgba(16, 18, 20, 0.32);
 }
 
+.panel-resizer {
+  position: absolute;
+  z-index: 20;
+  outline: none;
+  touch-action: none;
+}
+
+.panel-resizer::after {
+  position: absolute;
+  background: transparent;
+  content: "";
+  transition: background-color 140ms ease;
+}
+
+.panel-resizer:hover::after,
+.panel-resizer:focus-visible::after,
+body.is-resizing-panels .panel-resizer:active::after {
+  background: var(--accent);
+}
+
+.panel-resizer--left,
+.panel-resizer--right {
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  cursor: col-resize;
+}
+
+.panel-resizer--left {
+  right: -5px;
+}
+
+.panel-resizer--right {
+  left: -5px;
+}
+
+.panel-resizer--left::after,
+.panel-resizer--right::after {
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+}
+
+.panel-resizer--bottom {
+  top: -5px;
+  right: 0;
+  left: 0;
+  height: 9px;
+  cursor: row-resize;
+}
+
+.panel-resizer--bottom::after {
+  top: 4px;
+  right: 0;
+  left: 0;
+  height: 1px;
+}
+
 .modal--compact {
   width: min(430px, calc(100vw - 32px));
 }
@@ -1482,8 +1559,12 @@ svg {
 }
 
 @media (max-width: 1120px) {
+  :root {
+    --inspector-width: 250px;
+  }
+
   .workspace-body {
-    grid-template-columns: minmax(0, 1fr) 250px;
+    grid-template-columns: minmax(0, 1fr) var(--inspector-width);
   }
 
   .inspector {
@@ -1565,7 +1646,11 @@ svg {
   }
 
   .workspace-body {
-    grid-template-columns: minmax(0, 1fr) 250px;
+    grid-template-columns: minmax(0, 1fr) var(--inspector-width);
+  }
+
+  .panel-resizer {
+    display: none;
   }
 }
 

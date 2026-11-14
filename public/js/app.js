@@ -6,6 +6,7 @@ const DEFAULT_DANCER_COLOR = "#f97316";
 const STAGE_THEME_KEY = "hanabi-stage-theme";
 const STAGE_GRID_KEY = "hanabi-stage-grid";
 const STAGE_SIZE_KEY = "hanabi-stage-size";
+const PANEL_LAYOUT_KEY = "hanabi-panel-layout";
 const mobileLayout = window.matchMedia("(max-width: 720px)");
 
 const elements = {
@@ -26,6 +27,9 @@ const elements = {
   stageThemeButton: $("#stageThemeButton"),
   stageThemeIcon: $("#stageThemeIcon"),
   stageResizeHandle: $("#stageResizeHandle"),
+  sidebarResizer: $("#sidebarResizer"),
+  inspectorResizer: $("#inspectorResizer"),
+  timelineResizer: $("#timelineResizer"),
   canvasStageArea: $("#canvasStageArea"),
   emptyStage: $("#emptyStage"),
   playButton: $("#playButton"),
@@ -106,6 +110,7 @@ let formationDragState = null;
 let annotationSaveTimer = null;
 let mobileGestureFrame = null;
 let pendingMobileGesture = null;
+let panelResizeState = null;
 
 const stage = new StageCanvas(elements.stageCanvas, {
   onSelect: (dancerId) => selectDancer(dancerId),
@@ -135,6 +140,7 @@ function selectedDancer() {
 async function init() {
   bindEvents();
   initializeMobilePanels();
+  restorePanelLayout();
   applyStageAppearance();
   restoreStageSize();
   try {
@@ -181,6 +187,8 @@ function bindEvents() {
   elements.stageResizeHandle.addEventListener("pointercancel", endStageResize);
   elements.stageResizeHandle.addEventListener("dblclick", resetStageSize);
   window.addEventListener("resize", clampStageFrame);
+  window.addEventListener("resize", clampPanelLayout);
+  bindPanelResizers();
   mobileLayout.addEventListener("change", initializeMobilePanels);
   elements.inspectorToggle.addEventListener("click", () => toggleMobilePanel("inspector"));
   elements.timelineToggle.addEventListener("click", () => toggleMobilePanel("timeline"));
@@ -236,6 +244,247 @@ function bindEvents() {
       if (event.target === dialog) dialog.close();
     });
   });
+}
+
+function bindPanelResizers() {
+  const resizers = [
+    ["sidebar", elements.sidebarResizer],
+    ["inspector", elements.inspectorResizer],
+    ["timeline", elements.timelineResizer]
+  ];
+  for (const [type, handle] of resizers) {
+    handle.addEventListener("pointerdown", (event) =>
+      beginPanelResize(event, type, handle)
+    );
+    handle.addEventListener("pointermove", movePanelResize);
+    handle.addEventListener("pointerup", endPanelResize);
+    handle.addEventListener("pointercancel", endPanelResize);
+    handle.addEventListener("keydown", (event) =>
+      resizePanelWithKeyboard(event, type)
+    );
+  }
+}
+
+function beginPanelResize(event, type, handle) {
+  if (window.innerWidth <= 940 || event.button !== 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const sizes = readPanelSizes();
+  panelResizeState = {
+    type,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    sizes,
+    bounds: getPanelResizeBounds(sizes)
+  };
+  handle.setPointerCapture(event.pointerId);
+  document.body.classList.add("is-resizing-panels");
+  document.body.dataset.panelResize =
+    type === "timeline" ? "horizontal" : "vertical";
+}
+
+function movePanelResize(event) {
+  if (!panelResizeState || panelResizeState.pointerId !== event.pointerId) return;
+  event.preventDefault();
+  const { type, sizes, bounds, startX, startY } = panelResizeState;
+  if (type === "sidebar") {
+    applyPanelSizes({
+      ...sizes,
+      sidebarWidth: clamp(
+        sizes.sidebarWidth + event.clientX - startX,
+        bounds.sidebarMin,
+        bounds.sidebarMax
+      )
+    });
+  } else if (type === "inspector") {
+    applyPanelSizes({
+      ...sizes,
+      inspectorWidth: clamp(
+        sizes.inspectorWidth - (event.clientX - startX),
+        bounds.inspectorMin,
+        bounds.inspectorMax
+      )
+    });
+  } else {
+    applyPanelSizes({
+      ...sizes,
+      timelineHeight: clamp(
+        sizes.timelineHeight - (event.clientY - startY),
+        bounds.timelineMin,
+        bounds.timelineMax
+      )
+    });
+  }
+}
+
+function endPanelResize(event) {
+  if (!panelResizeState || panelResizeState.pointerId !== event.pointerId) return;
+  const handle = event.currentTarget;
+  if (handle.hasPointerCapture(event.pointerId)) {
+    handle.releasePointerCapture(event.pointerId);
+  }
+  panelResizeState = null;
+  document.body.classList.remove("is-resizing-panels");
+  delete document.body.dataset.panelResize;
+  persistPanelLayout();
+}
+
+function resizePanelWithKeyboard(event, type) {
+  if (window.innerWidth <= 940) return;
+  const sizes = readPanelSizes();
+  const bounds = getPanelResizeBounds(sizes);
+  const step = event.shiftKey ? 36 : 12;
+  let next = null;
+  if (type === "sidebar" && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+    next = {
+      ...sizes,
+      sidebarWidth: clamp(
+        sizes.sidebarWidth + (event.key === "ArrowRight" ? step : -step),
+        bounds.sidebarMin,
+        bounds.sidebarMax
+      )
+    };
+  } else if (
+    type === "inspector" &&
+    (event.key === "ArrowLeft" || event.key === "ArrowRight")
+  ) {
+    next = {
+      ...sizes,
+      inspectorWidth: clamp(
+        sizes.inspectorWidth + (event.key === "ArrowLeft" ? step : -step),
+        bounds.inspectorMin,
+        bounds.inspectorMax
+      )
+    };
+  } else if (
+    type === "timeline" &&
+    (event.key === "ArrowUp" || event.key === "ArrowDown")
+  ) {
+    next = {
+      ...sizes,
+      timelineHeight: clamp(
+        sizes.timelineHeight + (event.key === "ArrowUp" ? step : -step),
+        bounds.timelineMin,
+        bounds.timelineMax
+      )
+    };
+  }
+  if (!next) return;
+  event.preventDefault();
+  applyPanelSizes(next);
+  persistPanelLayout();
+}
+
+function readPanelSizes() {
+  const style = window.getComputedStyle(document.documentElement);
+  return {
+    sidebarWidth: Number.parseFloat(style.getPropertyValue("--sidebar-width")) || 286,
+    inspectorWidth:
+      Number.parseFloat(style.getPropertyValue("--inspector-width")) || 286,
+    timelineHeight:
+      Number.parseFloat(style.getPropertyValue("--timeline-height")) || 168
+  };
+}
+
+function getPanelResizeBounds(sizes) {
+  const viewportWidth = window.innerWidth;
+  const stageMinWidth = 320;
+  const sidebarMin = 220;
+  const inspectorMin = 220;
+  const timelineMin = 96;
+  return {
+    sidebarMin,
+    inspectorMin,
+    timelineMin,
+    sidebarMax: Math.max(
+      sidebarMin,
+      Math.min(440, viewportWidth - sizes.inspectorWidth - stageMinWidth)
+    ),
+    inspectorMax: Math.max(
+      inspectorMin,
+      Math.min(440, viewportWidth - sizes.sidebarWidth - stageMinWidth)
+    ),
+    timelineMax: Math.max(
+      timelineMin,
+      Math.min(420, elements.timelinePanel.parentElement.clientHeight - 84 - 220)
+    )
+  };
+}
+
+function applyPanelSizes(sizes) {
+  const rootStyle = document.documentElement.style;
+  rootStyle.setProperty("--sidebar-width", `${Math.round(sizes.sidebarWidth)}px`);
+  rootStyle.setProperty("--inspector-width", `${Math.round(sizes.inspectorWidth)}px`);
+  rootStyle.setProperty("--timeline-height", `${Math.round(sizes.timelineHeight)}px`);
+  updatePanelResizerAccessibility(sizes);
+}
+
+function updatePanelResizerAccessibility(sizes) {
+  const bounds = getPanelResizeBounds(sizes);
+  elements.sidebarResizer.setAttribute("aria-valuemin", String(bounds.sidebarMin));
+  elements.sidebarResizer.setAttribute("aria-valuemax", String(bounds.sidebarMax));
+  elements.sidebarResizer.setAttribute("aria-valuenow", String(Math.round(sizes.sidebarWidth)));
+  elements.inspectorResizer.setAttribute("aria-valuemin", String(bounds.inspectorMin));
+  elements.inspectorResizer.setAttribute("aria-valuemax", String(bounds.inspectorMax));
+  elements.inspectorResizer.setAttribute("aria-valuenow", String(Math.round(sizes.inspectorWidth)));
+  elements.timelineResizer.setAttribute("aria-valuemin", String(bounds.timelineMin));
+  elements.timelineResizer.setAttribute("aria-valuemax", String(bounds.timelineMax));
+  elements.timelineResizer.setAttribute("aria-valuenow", String(Math.round(sizes.timelineHeight)));
+}
+
+function restorePanelLayout() {
+  if (window.innerWidth <= 940) return;
+  const saved = readJsonPreference(PANEL_LAYOUT_KEY);
+  if (!saved) {
+    updatePanelResizerAccessibility(readPanelSizes());
+    return;
+  }
+  window.requestAnimationFrame(() => {
+    const sizes = {
+      sidebarWidth: Number(saved.sidebarWidth) || 286,
+      inspectorWidth: Number(saved.inspectorWidth) || 286,
+      timelineHeight: Number(saved.timelineHeight) || 168
+    };
+    const bounds = getPanelResizeBounds(sizes);
+    applyPanelSizes({
+      sidebarWidth: clamp(sizes.sidebarWidth, bounds.sidebarMin, bounds.sidebarMax),
+      inspectorWidth: clamp(
+        sizes.inspectorWidth,
+        bounds.inspectorMin,
+        bounds.inspectorMax
+      ),
+      timelineHeight: clamp(
+        sizes.timelineHeight,
+        bounds.timelineMin,
+        bounds.timelineMax
+      )
+    });
+  });
+}
+
+function clampPanelLayout() {
+  if (window.innerWidth <= 940 || panelResizeState) return;
+  const sizes = readPanelSizes();
+  const bounds = getPanelResizeBounds(sizes);
+  applyPanelSizes({
+    sidebarWidth: clamp(sizes.sidebarWidth, bounds.sidebarMin, bounds.sidebarMax),
+    inspectorWidth: clamp(
+      sizes.inspectorWidth,
+      bounds.inspectorMin,
+      bounds.inspectorMax
+    ),
+    timelineHeight: clamp(
+      sizes.timelineHeight,
+      bounds.timelineMin,
+      bounds.timelineMax
+    )
+  });
+}
+
+function persistPanelLayout() {
+  if (window.innerWidth <= 940) return;
+  writePreference(PANEL_LAYOUT_KEY, JSON.stringify(readPanelSizes()));
 }
 
 async function loadProject(projectId, preferredFormationId = null, preferredDancerId = null) {
