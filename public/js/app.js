@@ -104,6 +104,8 @@ let pendingFormationSaveId = null;
 let stageResizeState = null;
 let formationDragState = null;
 let annotationSaveTimer = null;
+let mobileGestureFrame = null;
+let pendingMobileGesture = null;
 
 const stage = new StageCanvas(elements.stageCanvas, {
   onSelect: (dancerId) => selectDancer(dancerId),
@@ -115,7 +117,6 @@ const stage = new StageCanvas(elements.stageCanvas, {
     handleAnnotationPositionChange(annotationId, position),
   onAnnotationPositionCommit: (annotationId, position) =>
     handleAnnotationPositionCommit(annotationId, position),
-  onPageScroll: (deltaY) => window.scrollBy(0, -deltaY),
   onMobileStageGesture: (gesture) => handleMobileStageGesture(gesture),
   onMobileStageGestureStart: () =>
     elements.canvasStageArea.classList.add("is-panning"),
@@ -1300,19 +1301,40 @@ function moveStageResize(event) {
 }
 
 function handleMobileStageGesture({ scale, deltaX, deltaY }) {
+  if (!pendingMobileGesture) {
+    pendingMobileGesture = { scale: 1, deltaX: 0, deltaY: 0 };
+  }
+  pendingMobileGesture.scale *= scale;
+  pendingMobileGesture.deltaX += deltaX;
+  pendingMobileGesture.deltaY += deltaY;
+  if (!mobileGestureFrame) {
+    mobileGestureFrame = window.requestAnimationFrame(applyMobileStageGesture);
+  }
+}
+
+function applyMobileStageGesture() {
+  mobileGestureFrame = null;
+  if (!pendingMobileGesture) return;
+  const gesture = pendingMobileGesture;
+  pendingMobileGesture = null;
   const rect = elements.canvasFrame.getBoundingClientRect();
   const bounds = getStageResizeBounds();
-  const scaleFactor = Math.abs(scale - 1) < 0.002 ? 1 : scale;
+  const scaleFactor = Math.abs(gesture.scale - 1) < 0.004 ? 1 : gesture.scale;
   const width = clamp(rect.width * scaleFactor, bounds.minWidth, bounds.maxWidth);
   const height = clamp(rect.height * scaleFactor, bounds.minHeight, bounds.maxHeight);
   if (scaleFactor !== 1 || width !== rect.width || height !== rect.height) {
     setStageFrameSize(width, height);
   }
-  elements.canvasStageArea.scrollLeft -= deltaX;
-  elements.canvasStageArea.scrollTop -= deltaY;
+  elements.canvasStageArea.scrollLeft -= gesture.deltaX;
+  elements.canvasStageArea.scrollTop -= gesture.deltaY;
 }
 
 function finishMobileStageGesture() {
+  if (mobileGestureFrame) {
+    window.cancelAnimationFrame(mobileGestureFrame);
+    mobileGestureFrame = null;
+    applyMobileStageGesture();
+  }
   elements.canvasStageArea.classList.remove("is-panning");
   persistStageFrameSize();
 }

@@ -17,7 +17,6 @@ export class StageCanvas {
     this.draggingAnnotationId = null;
     this.annotationDragState = null;
     this.touchPoints = new Map();
-    this.touchPageScroll = null;
     this.mobileGesture = null;
     this.textPlacementMode = false;
     this.activePointerType = "mouse";
@@ -36,13 +35,15 @@ export class StageCanvas {
     canvas.addEventListener("pointermove", (event) => this.handlePointerMove(event));
     canvas.addEventListener("pointerup", (event) => this.handlePointerUp(event));
     canvas.addEventListener("pointercancel", (event) => this.handlePointerUp(event));
+    canvas.addEventListener("touchstart", (event) => this.handleTouchStart(event), {
+      passive: false
+    });
     canvas.addEventListener("contextmenu", (event) => event.preventDefault());
     canvas.addEventListener("dragstart", (event) => event.preventDefault());
     canvas.addEventListener("pointerleave", () => {
       if (
         !this.draggingDancerId &&
         !this.draggingAnnotationId &&
-        !this.touchPageScroll &&
         !this.mobileGesture
       ) {
         this.hoveredDancerId = null;
@@ -158,6 +159,22 @@ export class StageCanvas {
     this.callbacks.onAnimationComplete?.(completed.toFormationId);
   }
 
+  handleTouchStart(event) {
+    if (this.animation || !this.project) return;
+    if (event.touches.length >= 2) {
+      event.preventDefault();
+      return;
+    }
+    const touch = event.touches[0];
+    if (!touch) return;
+    const point = this.eventToStage(touch);
+    const hitDancer = this.findDancerAt(point.x, point.y, "touch");
+    const hitAnnotation = hitDancer ? null : this.findAnnotationAt(point.x, point.y);
+    if (this.textPlacementMode || hitDancer || hitAnnotation) {
+      event.preventDefault();
+    }
+  }
+
   handlePointerDown(event) {
     if (this.animation || !this.project) return;
     this.activePointerType = event.pointerType || "mouse";
@@ -166,7 +183,6 @@ export class StageCanvas {
         x: event.clientX,
         y: event.clientY
       });
-      this.canvas.setPointerCapture(event.pointerId);
       if (this.touchPoints.size >= 2) {
         event.preventDefault();
         this.beginMobileStageGesture();
@@ -208,15 +224,6 @@ export class StageCanvas {
       }
 
       this.selectedAnnotationId = null;
-      if (event.pointerType === "touch") {
-        event.preventDefault();
-        this.touchPageScroll = {
-          pointerId: event.pointerId,
-          lastY: event.clientY,
-          moved: false
-        };
-        this.canvas.style.cursor = "grabbing";
-      }
       return;
     }
 
@@ -250,16 +257,24 @@ export class StageCanvas {
     this.draggingDancerId = null;
     this.draggingAnnotationId = null;
     this.annotationDragState = null;
-    this.touchPageScroll = null;
 
     const points = [...this.touchPoints.values()].slice(0, 2);
     const distance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
-    this.mobileGesture = {
-      lastDistance: Math.max(1, distance),
-      lastMidpoint: {
-        x: (points[0].x + points[1].x) / 2,
-        y: (points[0].y + points[1].y) / 2
+    const midpoint = {
+      x: (points[0].x + points[1].x) / 2,
+      y: (points[0].y + points[1].y) / 2
+    };
+    for (const pointerId of this.touchPoints.keys()) {
+      if (!this.canvas.hasPointerCapture(pointerId)) {
+        this.canvas.setPointerCapture(pointerId);
       }
+    }
+    this.mobileGesture = {
+      startDistance: Math.max(1, distance),
+      startMidpoint: midpoint,
+      lastDistance: Math.max(1, distance),
+      lastMidpoint: midpoint,
+      mode: null
     };
     this.canvas.style.cursor = "grabbing";
     this.callbacks.onMobileStageGestureStart?.();
@@ -286,27 +301,31 @@ export class StageCanvas {
         x: (points[0].x + points[1].x) / 2,
         y: (points[0].y + points[1].y) / 2
       };
+      const gesture = this.mobileGesture;
+      const distanceDelta = Math.abs(distance - gesture.startDistance);
+      const midpointTravel = Math.hypot(
+        midpoint.x - gesture.startMidpoint.x,
+        midpoint.y - gesture.startMidpoint.y
+      );
+      if (!gesture.mode) {
+        if (Math.max(distanceDelta, midpointTravel) < 7) return;
+        gesture.mode =
+          distanceDelta >= 8 && distanceDelta > midpointTravel * 0.75
+            ? "pinch"
+            : "pan";
+      }
+
+      const scale =
+        gesture.mode === "pinch"
+          ? distance / gesture.lastDistance
+          : 1;
       this.callbacks.onMobileStageGesture?.({
-        scale: distance / this.mobileGesture.lastDistance,
+        scale: Math.abs(scale - 1) < 0.003 ? 1 : scale,
         deltaX: midpoint.x - this.mobileGesture.lastMidpoint.x,
         deltaY: midpoint.y - this.mobileGesture.lastMidpoint.y
       });
       this.mobileGesture.lastDistance = distance;
       this.mobileGesture.lastMidpoint = midpoint;
-      return;
-    }
-
-    if (
-      this.touchPageScroll &&
-      this.touchPageScroll.pointerId === event.pointerId
-    ) {
-      event.preventDefault();
-      const deltaY = event.clientY - this.touchPageScroll.lastY;
-      this.touchPageScroll.lastY = event.clientY;
-      if (Math.abs(deltaY) > 0) {
-        this.touchPageScroll.moved = true;
-        this.callbacks.onPageScroll?.(deltaY);
-      }
       return;
     }
 
@@ -390,14 +409,6 @@ export class StageCanvas {
           this.canvas.style.cursor = this.textPlacementMode ? "text" : "default";
           this.callbacks.onMobileStageGestureEnd?.();
         }
-        return;
-      }
-      if (
-        this.touchPageScroll &&
-        this.touchPageScroll.pointerId === event.pointerId
-      ) {
-        this.touchPageScroll = null;
-        this.canvas.style.cursor = this.textPlacementMode ? "text" : "default";
         return;
       }
     }
