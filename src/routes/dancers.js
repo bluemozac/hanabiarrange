@@ -1,5 +1,12 @@
 const express = require("express");
-const { ApiError, parseId, requiredText, optionalText, colorHex } = require("../http");
+const {
+  ApiError,
+  parseId,
+  requiredText,
+  optionalText,
+  colorHex,
+  finiteNumber
+} = require("../http");
 const {
   getProjectRow,
   mapDancer,
@@ -31,6 +38,12 @@ function createDancersRouter(db) {
     const code = requiredText(request.body?.code, "舞者代號", 20);
     const name = optionalText(request.body?.name, "舞者名稱", 80) ?? "";
     const color = colorHex(request.body?.color ?? "#f97316");
+    const sizeScale = finiteNumber(
+      request.body?.sizeScale ?? project.default_dancer_scale ?? 1,
+      "舞者大小",
+      0.5,
+      2
+    );
 
     const create = db.transaction(() => {
       const nextOrder = db
@@ -40,10 +53,10 @@ function createDancersRouter(db) {
         .get(project.id).next_order;
       const result = db
         .prepare(
-          `INSERT INTO dancers (project_id, code, name, color, sort_order)
-           VALUES (?, ?, ?, ?, ?)`
+          `INSERT INTO dancers (project_id, code, name, color, size_scale, sort_order)
+           VALUES (?, ?, ?, ?, ?, ?)`
         )
-        .run(project.id, code, name, color, nextOrder);
+        .run(project.id, code, name, color, sizeScale, nextOrder);
       const dancerId = Number(result.lastInsertRowid);
 
       const dancers = db
@@ -65,7 +78,9 @@ function createDancersRouter(db) {
           dancers,
           project.stage_width,
           project.stage_height,
-          current
+          current,
+          project.stage_shape,
+          Boolean(project.stage_flipped)
         );
         updatePositions.run(JSON.stringify(positions), formation.id);
       }
@@ -93,12 +108,16 @@ function createDancersRouter(db) {
     const name =
       request.body?.name === undefined ? current.name : optionalText(request.body.name, "舞者名稱", 80);
     const color = request.body?.color === undefined ? current.color : colorHex(request.body.color);
+    const sizeScale =
+      request.body?.sizeScale === undefined
+        ? current.size_scale
+        : finiteNumber(request.body.sizeScale, "舞者大小", 0.5, 2);
 
     db.prepare(
       `UPDATE dancers
-       SET code = ?, name = ?, color = ?, updated_at = CURRENT_TIMESTAMP
+       SET code = ?, name = ?, color = ?, size_scale = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`
-    ).run(code, name, color, dancerId);
+    ).run(code, name, color, sizeScale, dancerId);
     touchProject(db, project.id);
     request.app.locals.realtime?.broadcastProjectChanged(project.id, "dancers-changed");
 

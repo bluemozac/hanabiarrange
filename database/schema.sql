@@ -6,6 +6,11 @@ CREATE TABLE IF NOT EXISTS projects (
   description TEXT NOT NULL DEFAULT '',
   stage_width REAL NOT NULL DEFAULT 100 CHECK (stage_width > 0),
   stage_height REAL NOT NULL DEFAULT 56.25 CHECK (stage_height > 0),
+  stage_shape TEXT NOT NULL DEFAULT 'rectangle'
+    CHECK (stage_shape IN ('rectangle', 'circle', 'semicircle')),
+  stage_flipped INTEGER NOT NULL DEFAULT 0 CHECK (stage_flipped IN (0, 1)),
+  default_dancer_scale REAL NOT NULL DEFAULT 1
+    CHECK (default_dancer_scale BETWEEN 0.5 AND 2),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -16,6 +21,7 @@ CREATE TABLE IF NOT EXISTS dancers (
   code TEXT NOT NULL CHECK (length(trim(code)) BETWEEN 1 AND 20),
   name TEXT NOT NULL DEFAULT '',
   color TEXT NOT NULL DEFAULT '#f97316',
+  size_scale REAL NOT NULL DEFAULT 1 CHECK (size_scale BETWEEN 0.5 AND 2),
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

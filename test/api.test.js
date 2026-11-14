@@ -41,18 +41,22 @@ test("project, dancer and formation CRUD workflow", async (t) => {
       name: "API Test Project",
       description: "Automated test",
       stageWidth: 100,
-      stageHeight: 60
+      stageHeight: 60,
+      defaultDancerScale: 1.25
     })
   });
   assert.equal(createdProject.response.status, 201);
   const projectId = createdProject.payload.project.id;
   assert.equal(createdProject.payload.project.formations.length, 1);
+  assert.equal(createdProject.payload.project.stageShape, "rectangle");
+  assert.equal(createdProject.payload.project.defaultDancerScale, 1.25);
 
   const firstDancer = await request(`/api/projects/${projectId}/dancers`, {
     method: "POST",
     body: JSON.stringify({ code: "A1", name: "Alice", color: "#f97316" })
   });
   assert.equal(firstDancer.response.status, 201);
+  assert.equal(firstDancer.payload.dancer.sizeScale, 1.25);
 
   const secondDancer = await request(`/api/projects/${projectId}/dancers`, {
     method: "POST",
@@ -60,6 +64,17 @@ test("project, dancer and formation CRUD workflow", async (t) => {
   });
   assert.equal(secondDancer.response.status, 201);
   assert.equal(secondDancer.payload.dancer.color, "#f97316");
+  assert.equal(secondDancer.payload.dancer.sizeScale, 1.25);
+
+  const resizedDancer = await request(
+    `/api/projects/${projectId}/dancers/${firstDancer.payload.dancer.id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ sizeScale: 1.7 })
+    }
+  );
+  assert.equal(resizedDancer.response.status, 200);
+  assert.equal(resizedDancer.payload.dancer.sizeScale, 1.7);
 
   const duplicateDancer = await request(`/api/projects/${projectId}/dancers`, {
     method: "POST",
@@ -203,7 +218,11 @@ test("project, dancer and formation CRUD workflow", async (t) => {
   assert.equal(duplicate.name, "API Test Project 副本");
   assert.equal(duplicate.stageWidth, 100);
   assert.equal(duplicate.stageHeight, 60);
+  assert.equal(duplicate.stageShape, "rectangle");
+  assert.equal(duplicate.stageFlipped, false);
+  assert.equal(duplicate.defaultDancerScale, 1.25);
   assert.equal(duplicate.dancers.length, 2);
+  assert.equal(duplicate.dancers[0].sizeScale, 1.7);
   assert.deepEqual(
     duplicate.dancers.map((dancer) => dancer.code),
     ["A1", "B1"]
@@ -308,16 +327,47 @@ test("project, dancer and formation CRUD workflow", async (t) => {
 
   const updatedProject = await request(`/api/projects/${projectId}`, {
     method: "PATCH",
-    body: JSON.stringify({ stageWidth: 50, stageHeight: 50 })
+    body: JSON.stringify({ stageWidth: 50, stageHeight: 50, stageShape: "circle" })
   });
   assert.equal(updatedProject.response.status, 200);
   assert.equal(updatedProject.payload.project.stageWidth, 50);
+  assert.equal(updatedProject.payload.project.stageShape, "circle");
+  const positionBeforeFlip =
+    updatedProject.payload.project.formations[0].positions[
+      firstDancer.payload.dancer.id
+    ];
+  const annotationBeforeFlip = updatedProject.payload.project.formations.find(
+    (formation) => formation.id === formationId
+  ).annotations[0];
   for (const formation of updatedProject.payload.project.formations) {
     for (const position of Object.values(formation.positions)) {
       assert.ok(position.x <= 50);
       assert.ok(position.y <= 50);
     }
   }
+
+  const flippedProject = await request(`/api/projects/${projectId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ stageFlipped: true })
+  });
+  assert.equal(flippedProject.response.status, 200);
+  assert.equal(flippedProject.payload.project.stageFlipped, true);
+  const flippedAnnotation = flippedProject.payload.project.formations.find(
+    (formation) => formation.id === formationId
+  ).annotations[0];
+  assert.equal(
+    flippedAnnotation.y,
+    Number((50 - annotationBeforeFlip.y).toFixed(2))
+  );
+  assert.deepEqual(
+    flippedProject.payload.project.formations[0].positions[
+      firstDancer.payload.dancer.id
+    ],
+    {
+      x: positionBeforeFlip.x,
+      y: Number((50 - positionBeforeFlip.y).toFixed(2))
+    }
+  );
 
   const deletedProject = await request(`/api/projects/${projectId}`, { method: "DELETE" });
   assert.equal(deletedProject.response.status, 204);

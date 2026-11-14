@@ -71,6 +71,9 @@
       <symbol id="icon-text" viewBox="0 0 24 24">
         <path d="M4 7V4h16v3M9 20h6M12 4v16" />
       </symbol>
+      <symbol id="icon-flip-vertical" viewBox="0 0 24 24">
+        <path d="M12 3v18M8 7l4-4 4 4M8 17l4 4 4-4" />
+      </symbol>
     </svg>
 
     <div class="app-shell">
@@ -154,6 +157,9 @@
               <div class="stage-toolbar-controls">
                 <button class="icon-button view-toggle" id="addTextButton" type="button" title="加入文字注解" aria-label="加入文字注解" aria-pressed="false">
                   <svg><use href="#icon-text"></use></svg>
+                </button>
+                <button class="icon-button view-toggle" id="stageFlipButton" type="button" title="上下反轉舞台" aria-label="上下反轉舞台" aria-pressed="false">
+                  <svg><use href="#icon-flip-vertical"></use></svg>
                 </button>
                 <button class="icon-button view-toggle" id="stageGridButton" type="button" title="顯示網格" aria-label="顯示網格" aria-pressed="true">
                   <svg><use href="#icon-grid"></use></svg>
@@ -264,11 +270,15 @@
                       <input id="dancerColorInput" name="color" class="color-input" type="color" disabled />
                     </label>
                   </div>
-                  <label class="field">
-                    <span>名稱</span>
-                    <input id="dancerNameInput" name="name" type="text" maxlength="80" disabled />
-                  </label>
-                  <div class="coordinate-row">
+                <label class="field">
+                  <span>名稱</span>
+                  <input id="dancerNameInput" name="name" type="text" maxlength="80" disabled />
+                </label>
+                <label class="field range-field">
+                  <span>舞者大小 <output id="dancerSizeOutput">100%</output></span>
+                  <input id="dancerSizeInput" type="range" min="50" max="200" step="5" value="100" disabled />
+                </label>
+                <div class="coordinate-row">
                     <label class="coordinate-field">
                       <span>X 座標</span>
                       <input id="dancerXInput" type="number" min="0" step="0.01" disabled />
@@ -341,6 +351,25 @@
         <label class="field">
           <span>專案說明</span>
           <textarea id="projectDescriptionInput" maxlength="500" rows="3" placeholder="排練版本、演出場合或備註"></textarea>
+        </label>
+        <label class="field">
+          <span>舞台形狀</span>
+          <select id="stageShapeSelect">
+            <option value="rectangle">矩形舞台</option>
+            <option value="circle">圓形舞台</option>
+            <option value="semicircle">半圓形舞台</option>
+          </select>
+        </label>
+        <label class="setting-toggle">
+          <input id="stageFlippedInput" type="checkbox" />
+          <span>上下反轉舞台</span>
+        </label>
+        <label class="field">
+          <span>新舞者預設大小</span>
+          <div class="input-with-suffix">
+            <input id="defaultDancerScaleInput" type="number" min="50" max="200" step="5" value="100" required />
+            <span>%</span>
+          </div>
         </label>
         <div class="field-row">
           <label class="field">

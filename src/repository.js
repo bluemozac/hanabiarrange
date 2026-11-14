@@ -8,6 +8,9 @@ function mapProjectSummary(row) {
     description: row.description,
     stageWidth: row.stage_width,
     stageHeight: row.stage_height,
+    stageShape: row.stage_shape || "rectangle",
+    stageFlipped: Boolean(row.stage_flipped),
+    defaultDancerScale: row.default_dancer_scale ?? 1,
     dancerCount: row.dancer_count,
     formationCount: row.formation_count,
     createdAt: row.created_at,
@@ -22,6 +25,7 @@ function mapDancer(row) {
     code: row.code,
     name: row.name,
     color: row.color,
+    sizeScale: row.size_scale ?? 1,
     sortOrder: row.sort_order
   };
 }
@@ -40,7 +44,13 @@ function mapFormation(row) {
   };
 }
 
-function normalizeAnnotations(input, stageWidth, stageHeight) {
+function normalizeAnnotations(
+  input,
+  stageWidth,
+  stageHeight,
+  stageShape = "rectangle",
+  stageFlipped = false
+) {
   if (!Array.isArray(input)) {
     throw new ApiError(400, "annotations 必須是文字注解陣列");
   }
@@ -77,11 +87,19 @@ function normalizeAnnotations(input, stageWidth, stageHeight) {
       throw new ApiError(400, "文字注解字級必須介於 10 與 32");
     }
 
+    const position = clampStageCoordinates(
+      x,
+      y,
+      stageWidth,
+      stageHeight,
+      stageShape,
+      stageFlipped
+    );
     return {
       id,
       text,
-      x: roundCoordinate(Math.min(stageWidth, Math.max(0, x))),
-      y: roundCoordinate(Math.min(stageHeight, Math.max(0, y))),
+      x: position.x,
+      y: position.y,
       color: colorHex(annotation.color ?? "#eb5e35"),
       fontSize: Math.round(fontSize)
     };
@@ -153,7 +171,13 @@ function listProjects(db) {
     .map(mapProjectSummary);
 }
 
-function defaultPositions(dancers, stageWidth, stageHeight) {
+function defaultPositions(
+  dancers,
+  stageWidth,
+  stageHeight,
+  stageShape = "rectangle",
+  stageFlipped = false
+) {
   if (dancers.length === 0) return {};
 
   const columns = Math.max(1, Math.ceil(Math.sqrt(dancers.length * (stageWidth / stageHeight))));
@@ -164,17 +188,41 @@ function defaultPositions(dancers, stageWidth, stageHeight) {
       const row = Math.floor(index / columns);
       const x = (stageWidth * (column + 1)) / (columns + 1);
       const y = (stageHeight * (row + 1)) / (rows + 1);
-      return [String(dancer.id), { x: roundCoordinate(x), y: roundCoordinate(y) }];
+      return [
+        String(dancer.id),
+        clampStageCoordinates(
+          x,
+          y,
+          stageWidth,
+          stageHeight,
+          stageShape,
+          stageFlipped
+        )
+      ];
     })
   );
 }
 
-function normalizePositions(input, dancers, stageWidth, stageHeight, fallback = {}) {
+function normalizePositions(
+  input,
+  dancers,
+  stageWidth,
+  stageHeight,
+  fallback = {},
+  stageShape = "rectangle",
+  stageFlipped = false
+) {
   if (input !== undefined && !isPlainObject(input)) {
     throw new ApiError(400, "positions 必須是舞者 ID 對應座標的物件");
   }
 
-  const defaults = defaultPositions(dancers, stageWidth, stageHeight);
+  const defaults = defaultPositions(
+    dancers,
+    stageWidth,
+    stageHeight,
+    stageShape,
+    stageFlipped
+  );
   return Object.fromEntries(
     dancers.map((dancer) => {
       const key = String(dancer.id);
@@ -191,13 +239,51 @@ function normalizePositions(input, dancers, stageWidth, stageHeight, fallback = 
 
       return [
         key,
-        {
-          x: roundCoordinate(Math.min(stageWidth, Math.max(0, x))),
-          y: roundCoordinate(Math.min(stageHeight, Math.max(0, y)))
-        }
+        clampStageCoordinates(
+          x,
+          y,
+          stageWidth,
+          stageHeight,
+          stageShape,
+          stageFlipped
+        )
       ];
     })
   );
+}
+
+function clampStageCoordinates(
+  x,
+  y,
+  stageWidth,
+  stageHeight,
+  stageShape = "rectangle",
+  stageFlipped = false
+) {
+  let nextX = Math.min(stageWidth, Math.max(0, Number(x)));
+  let nextY = Math.min(stageHeight, Math.max(0, Number(y)));
+  const centerX = stageWidth / 2;
+  const centerY =
+    stageShape === "semicircle"
+      ? stageFlipped
+        ? 0
+        : stageHeight
+      : stageHeight / 2;
+  const radiusX = stageWidth / 2;
+  const radiusY = stageShape === "semicircle" ? stageHeight : stageHeight / 2;
+
+  if (stageShape === "circle" || stageShape === "semicircle") {
+    const normalizedX = (nextX - centerX) / radiusX;
+    const normalizedY = (nextY - centerY) / radiusY;
+    const distance = Math.hypot(normalizedX, normalizedY);
+    if (distance > 0.995) {
+      const scale = 0.995 / distance;
+      nextX = centerX + normalizedX * scale * radiusX;
+      nextY = centerY + normalizedY * scale * radiusY;
+    }
+  }
+
+  return { x: roundCoordinate(nextX), y: roundCoordinate(nextY) };
 }
 
 function roundCoordinate(value) {
@@ -220,5 +306,6 @@ module.exports = {
   defaultPositions,
   normalizePositions,
   normalizeAnnotations,
+  clampStageCoordinates,
   touchProject
 };

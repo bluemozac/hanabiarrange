@@ -38,12 +38,43 @@ function createDatabase(filename = path.join(__dirname, "..", "data", "hanabi.db
 }
 
 function migrateDatabase(db) {
+  const projectColumns = db.prepare("PRAGMA table_info(projects)").all();
+  if (!projectColumns.some((column) => column.name === "stage_shape")) {
+    db.exec(
+      `ALTER TABLE projects
+       ADD COLUMN stage_shape TEXT NOT NULL DEFAULT 'rectangle'
+       CHECK (stage_shape IN ('rectangle', 'circle', 'semicircle'))`
+    );
+  }
+  if (!projectColumns.some((column) => column.name === "stage_flipped")) {
+    db.exec(
+      `ALTER TABLE projects
+       ADD COLUMN stage_flipped INTEGER NOT NULL DEFAULT 0
+       CHECK (stage_flipped IN (0, 1))`
+    );
+  }
+  if (!projectColumns.some((column) => column.name === "default_dancer_scale")) {
+    db.exec(
+      `ALTER TABLE projects
+       ADD COLUMN default_dancer_scale REAL NOT NULL DEFAULT 1
+       CHECK (default_dancer_scale BETWEEN 0.5 AND 2)`
+    );
+  }
+
   const formationColumns = db.prepare("PRAGMA table_info(formations)").all();
   if (!formationColumns.some((column) => column.name === "annotations_json")) {
     db.exec(
       `ALTER TABLE formations
        ADD COLUMN annotations_json TEXT NOT NULL DEFAULT '[]'
        CHECK (json_valid(annotations_json))`
+    );
+  }
+  const dancerColumns = db.prepare("PRAGMA table_info(dancers)").all();
+  if (!dancerColumns.some((column) => column.name === "size_scale")) {
+    db.exec(
+      `ALTER TABLE dancers
+       ADD COLUMN size_scale REAL NOT NULL DEFAULT 1
+       CHECK (size_scale BETWEEN 0.5 AND 2)`
     );
   }
 }

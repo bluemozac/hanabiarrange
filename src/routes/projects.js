@@ -3,12 +3,15 @@ const {
   parseId,
   requiredText,
   optionalText,
-  finiteNumber
+  finiteNumber,
+  validStageShape,
+  validBoolean
 } = require("../http");
 const {
   getProject,
   listProjects,
   normalizePositions,
+  normalizeAnnotations,
   touchProject
 } = require("../repository");
 const { buildProjectPdf } = require("../pdf");
@@ -25,14 +28,36 @@ function createProjectsRouter(db) {
     const description = optionalText(request.body?.description, "專案說明", 500) ?? "";
     const stageWidth = finiteNumber(request.body?.stageWidth ?? 100, "舞台寬度", 10, 1000);
     const stageHeight = finiteNumber(request.body?.stageHeight ?? 56.25, "舞台高度", 10, 1000);
+    const stageShape = validStageShape(request.body?.stageShape, "rectangle");
+    const stageFlipped = validBoolean(
+      request.body?.stageFlipped,
+      "舞台反轉",
+      false
+    );
+    const defaultDancerScale = finiteNumber(
+      request.body?.defaultDancerScale ?? 1,
+      "新舞者預設大小",
+      0.5,
+      2
+    );
 
     const create = db.transaction(() => {
       const project = db
         .prepare(
-          `INSERT INTO projects (name, description, stage_width, stage_height)
-           VALUES (?, ?, ?, ?)`
+          `INSERT INTO projects
+             (name, description, stage_width, stage_height, stage_shape, stage_flipped,
+              default_dancer_scale)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
         )
-        .run(name, description, stageWidth, stageHeight);
+        .run(
+          name,
+          description,
+          stageWidth,
+          stageHeight,
+          stageShape,
+          stageFlipped ? 1 : 0,
+          defaultDancerScale
+        );
       const projectId = Number(project.lastInsertRowid);
       db.prepare(
         `INSERT INTO formations
@@ -62,20 +87,25 @@ function createProjectsRouter(db) {
     const duplicate = db.transaction(() => {
       const project = db
         .prepare(
-          `INSERT INTO projects (name, description, stage_width, stage_height)
-           VALUES (?, ?, ?, ?)`
+          `INSERT INTO projects
+             (name, description, stage_width, stage_height, stage_shape, stage_flipped,
+              default_dancer_scale)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           duplicateName,
           source.description,
           source.stageWidth,
-          source.stageHeight
+          source.stageHeight,
+          source.stageShape,
+          source.stageFlipped ? 1 : 0,
+          source.defaultDancerScale
         );
       const projectId = Number(project.lastInsertRowid);
       const dancerIdMap = new Map();
       const insertDancer = db.prepare(
-        `INSERT INTO dancers (project_id, code, name, color, sort_order)
-         VALUES (?, ?, ?, ?, ?)`
+        `INSERT INTO dancers (project_id, code, name, color, size_scale, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?)`
       );
       for (const dancer of source.dancers) {
         const result = insertDancer.run(
@@ -83,6 +113,7 @@ function createProjectsRouter(db) {
           dancer.code,
           dancer.name,
           dancer.color,
+          dancer.sizeScale,
           dancer.sortOrder
         );
         dancerIdMap.set(dancer.id, Number(result.lastInsertRowid));
@@ -177,29 +208,83 @@ function createProjectsRouter(db) {
       request.body?.stageHeight === undefined
         ? current.stageHeight
         : finiteNumber(request.body.stageHeight, "舞台高度", 10, 1000);
+    const stageShape =
+      request.body?.stageShape === undefined
+        ? current.stageShape
+        : validStageShape(request.body.stageShape);
+    const stageFlipped =
+      request.body?.stageFlipped === undefined
+        ? current.stageFlipped
+        : validBoolean(request.body.stageFlipped, "舞台反轉");
+    const defaultDancerScale =
+      request.body?.defaultDancerScale === undefined
+        ? current.defaultDancerScale
+        : finiteNumber(
+            request.body.defaultDancerScale,
+            "新舞者預設大小",
+            0.5,
+            2
+          );
 
     const update = db.transaction(() => {
       db.prepare(
         `UPDATE projects
-         SET name = ?, description = ?, stage_width = ?, stage_height = ?,
+         SET name = ?, description = ?, stage_width = ?, stage_height = ?, stage_shape = ?,
+             stage_flipped = ?, default_dancer_scale = ?,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`
-      ).run(name, description, stageWidth, stageHeight, projectId);
+      ).run(
+        name,
+        description,
+        stageWidth,
+        stageHeight,
+        stageShape,
+        stageFlipped ? 1 : 0,
+        defaultDancerScale,
+        projectId
+      );
 
-      if (stageWidth !== current.stageWidth || stageHeight !== current.stageHeight) {
+      if (
+        stageWidth !== current.stageWidth ||
+        stageHeight !== current.stageHeight ||
+        stageShape !== current.stageShape ||
+        stageFlipped !== current.stageFlipped
+      ) {
         const updateFormation = db.prepare(
           `UPDATE formations
-           SET positions_json = ?, updated_at = CURRENT_TIMESTAMP
+           SET positions_json = ?, annotations_json = ?, updated_at = CURRENT_TIMESTAMP
            WHERE id = ?`
         );
         for (const formation of current.formations) {
+          const sourcePositions =
+            stageFlipped !== current.stageFlipped
+              ? mirrorPositions(formation.positions, stageHeight)
+              : formation.positions;
+          const sourceAnnotations =
+            stageFlipped !== current.stageFlipped
+              ? mirrorAnnotations(formation.annotations, stageHeight)
+              : formation.annotations;
           const positions = normalizePositions(
-            formation.positions,
+            sourcePositions,
             current.dancers,
             stageWidth,
-            stageHeight
+            stageHeight,
+            sourcePositions,
+            stageShape,
+            stageFlipped
           );
-          updateFormation.run(JSON.stringify(positions), formation.id);
+          const annotations = normalizeAnnotations(
+            sourceAnnotations,
+            stageWidth,
+            stageHeight,
+            stageShape,
+            stageFlipped
+          );
+          updateFormation.run(
+            JSON.stringify(positions),
+            JSON.stringify(annotations),
+            formation.id
+          );
         }
       }
     });
@@ -223,6 +308,29 @@ function createProjectsRouter(db) {
 }
 
 module.exports = createProjectsRouter;
+
+function mirrorPositions(positions, stageHeight) {
+  return Object.fromEntries(
+    Object.entries(positions).map(([dancerId, position]) => [
+      dancerId,
+      {
+        x: position.x,
+        y: round(stageHeight - Number(position.y))
+      }
+    ])
+  );
+}
+
+function mirrorAnnotations(annotations, stageHeight) {
+  return (annotations ?? []).map((annotation) => ({
+    ...annotation,
+    y: round(stageHeight - Number(annotation.y))
+  }));
+}
+
+function round(value) {
+  return Math.round(value * 100) / 100;
+}
 
 function sanitizeFilename(value) {
   return String(value)

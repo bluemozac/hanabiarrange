@@ -54,12 +54,17 @@ function createFormationsRouter(db) {
       request.body?.positions,
       dancers,
       project.stage_width,
-      project.stage_height
+      project.stage_height,
+      {},
+      project.stage_shape,
+      Boolean(project.stage_flipped)
     );
     const annotations = normalizeAnnotations(
       request.body?.annotations ?? [],
       project.stage_width,
-      project.stage_height
+      project.stage_height,
+      project.stage_shape,
+      Boolean(project.stage_flipped)
     );
 
     const create = db.transaction(() => {
@@ -157,7 +162,9 @@ function createFormationsRouter(db) {
         getDancers(project.id),
         project.stage_width,
         project.stage_height,
-        positions
+        positions,
+        project.stage_shape,
+        Boolean(project.stage_flipped)
       );
     }
     const annotations =
@@ -166,7 +173,9 @@ function createFormationsRouter(db) {
         : normalizeAnnotations(
             request.body.annotations,
             project.stage_width,
-            project.stage_height
+            project.stage_height,
+            project.stage_shape,
+            Boolean(project.stage_flipped)
           );
 
     db.prepare(

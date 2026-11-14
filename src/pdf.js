@@ -168,7 +168,10 @@ function drawCover(document, project) {
     0
   );
   const cards = [
-    ["舞台尺寸", `${formatNumber(project.stageWidth)} × ${formatNumber(project.stageHeight)}`],
+    [
+      "舞台尺寸",
+      `${stageShapeLabel(project.stageShape)}${project.stageFlipped ? "／反轉" : ""} ${formatNumber(project.stageWidth)} × ${formatNumber(project.stageHeight)}`
+    ],
     ["舞者人數", `${project.dancers.length} 人`],
     ["隊形數量", `${project.formations.length} 個`],
     ["演出總長", `${totalDuration.toFixed(1)} 秒`]
@@ -328,15 +331,38 @@ function drawPageTitle(document, eyebrow, title, meta) {
 
 function drawStageDiagram(document, project, formation, frame) {
   const isDark = frame.theme === "dark";
-  document.roundedRect(frame.x, frame.y, frame.width, frame.height, 5).fill(isDark ? "#182226" : "#f4f2ec");
-  document
-    .roundedRect(frame.x + 0.5, frame.y + 0.5, frame.width - 1, frame.height - 1, 5)
+  tracePdfStagePath(
+    document,
+    frame.x,
+    frame.y,
+    frame.width,
+    frame.height,
+    project.stageShape,
+    project.stageFlipped
+  ).fill(isDark ? "#182226" : "#f4f2ec");
+  tracePdfStagePath(
+    document,
+    frame.x + 0.5,
+    frame.y + 0.5,
+    frame.width - 1,
+    frame.height - 1,
+    project.stageShape,
+    project.stageFlipped
+  )
     .lineWidth(1)
     .strokeColor(isDark ? "#45545a" : "#cac6bc")
     .stroke();
 
   document.save();
-  document.roundedRect(frame.x, frame.y, frame.width, frame.height, 5).clip();
+  tracePdfStagePath(
+    document,
+    frame.x,
+    frame.y,
+    frame.width,
+    frame.height,
+    project.stageShape,
+    project.stageFlipped
+  ).clip();
   document.lineWidth(0.75).strokeColor(isDark ? "#617278" : "#c9c5ba");
   for (let column = 1; column < 10; column += 1) {
     const x = frame.x + (frame.width * column) / 10;
@@ -369,10 +395,14 @@ function drawStageDiagram(document, project, formation, frame) {
 
   drawPdfAnnotations(document, project, formation, frame);
 
-  const radius = Math.max(6, Math.min(14, Math.min(frame.width, frame.height) / 24));
+  const baseRadius = Math.max(
+    6,
+    Math.min(14, Math.min(frame.width, frame.height) / 24)
+  );
   for (const dancer of project.dancers) {
     const position = formation.positions[String(dancer.id)];
     if (!position) continue;
+    const radius = baseRadius * (dancer.sizeScale ?? 1);
     const x = frame.x + (position.x / project.stageWidth) * frame.width;
     const y = frame.y + (position.y / project.stageHeight) * frame.height;
     document.circle(x, y, radius).fill(safeColor(dancer.color));
@@ -396,6 +426,68 @@ function drawStageDiagram(document, project, formation, frame) {
         lineBreak: false
       });
   }
+}
+
+function tracePdfStagePath(
+  document,
+  x,
+  y,
+  width,
+  height,
+  shape = "rectangle",
+  flipped = false
+) {
+  if (shape === "circle") {
+    return document.ellipse(
+      x + width / 2,
+      y + height / 2,
+      width / 2,
+      height / 2
+    );
+  }
+  if (shape === "semicircle") {
+    if (flipped) {
+      document.moveTo(x, y);
+      document.bezierCurveTo(
+        x,
+        y + height * 0.56,
+        x + width * 0.28,
+        y + height,
+        x + width / 2,
+        y + height
+      );
+      document.bezierCurveTo(
+        x + width * 0.72,
+        y + height,
+        x + width,
+        y + height * 0.56,
+        x + width,
+        y
+      );
+      document.closePath();
+      return document;
+    }
+    document.moveTo(x, y + height);
+    document.bezierCurveTo(
+      x,
+      y + height * 0.44,
+      x + width * 0.28,
+      y,
+      x + width / 2,
+      y
+    );
+    document.bezierCurveTo(
+      x + width * 0.72,
+      y,
+      x + width,
+      y + height * 0.44,
+      x + width,
+      y + height
+    );
+    document.closePath();
+    return document;
+  }
+  return document.roundedRect(x, y, width, height, 5);
 }
 
 function drawPdfAnnotations(document, project, formation, frame) {
@@ -601,6 +693,14 @@ function formatNumber(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) return "0";
   return Number.isInteger(number) ? String(number) : number.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+function stageShapeLabel(shape) {
+  return {
+    rectangle: "矩形",
+    circle: "圓形",
+    semicircle: "半圓"
+  }[shape] || "矩形";
 }
 
 function truncate(value, length) {

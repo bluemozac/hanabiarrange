@@ -52,6 +52,22 @@ function colorHex(value) {
   return value.toLowerCase();
 }
 
+function validStageShape(value, fallback = "rectangle") {
+  if (value === undefined) return fallback;
+  if (!["rectangle", "circle", "semicircle"].includes(value)) {
+    throw new ApiError(400, "舞台形狀必須是 rectangle、circle 或 semicircle");
+  }
+  return value;
+}
+
+function validBoolean(value, label, fallback = false) {
+  if (value === undefined) return fallback;
+  if (typeof value !== "boolean") {
+    throw new ApiError(400, `${label} 必須是布林值`);
+  }
+  return value;
+}
+
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -67,6 +83,8 @@ module.exports = {
   optionalText,
   finiteNumber,
   colorHex,
+  validStageShape,
+  validBoolean,
   isPlainObject,
   notFound
 };

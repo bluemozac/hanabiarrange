@@ -243,8 +243,7 @@ export class StageCanvas {
       this.textPlacementMode = false;
       this.canvas.style.cursor = "default";
       this.callbacks.onAnnotationPlace?.({
-        x: round(Math.min(this.project.stageWidth, Math.max(0, point.x))),
-        y: round(Math.min(this.project.stageHeight, Math.max(0, point.y)))
+        ...clampStagePosition(point, this.project)
       });
       return;
     }
@@ -399,12 +398,12 @@ export class StageCanvas {
       this.annotationDragState.lastY = event.clientY;
       this.annotationDragState.moved =
         this.annotationDragState.moved || Math.abs(deltaX) + Math.abs(deltaY) > 0.15;
-      annotation.x = round(
-        Math.min(this.project.stageWidth, Math.max(0, annotation.x + deltaX))
+      const position = clampStagePosition(
+        { x: annotation.x + deltaX, y: annotation.y + deltaY },
+        this.project
       );
-      annotation.y = round(
-        Math.min(this.project.stageHeight, Math.max(0, annotation.y + deltaY))
-      );
+      annotation.x = position.x;
+      annotation.y = position.y;
       this.callbacks.onAnnotationPositionChange?.(annotation.id, {
         x: annotation.x,
         y: annotation.y
@@ -415,10 +414,7 @@ export class StageCanvas {
 
     if (this.draggingDancerId) {
       event.preventDefault();
-      const position = {
-        x: round(Math.min(this.project.stageWidth, Math.max(0, point.x))),
-        y: round(Math.min(this.project.stageHeight, Math.max(0, point.y)))
-      };
+      const position = clampStagePosition(point, this.project);
       this.displayPositions[this.draggingDancerId] = position;
       this.callbacks.onPositionChange?.(this.draggingDancerId, position);
       this.draw();
@@ -509,11 +505,12 @@ export class StageCanvas {
 
   findDancerAt(x, y, pointerType = this.activePointerType) {
     if (!this.project) return null;
-    const threshold = this.dancerRadius() + (pointerType === "touch" ? 15 : 9);
     let closest = null;
     let closestDistance = Infinity;
 
     for (const dancer of this.dancers) {
+      const threshold =
+        this.dancerRadius(dancer) + (pointerType === "touch" ? 15 : 9);
       const position = this.displayPositions[String(dancer.id)];
       if (!position) continue;
       const screen = this.stageToScreen(position.x, position.y);
@@ -543,9 +540,13 @@ export class StageCanvas {
     return null;
   }
 
-  dancerRadius() {
+  dancerRadius(dancer = null) {
     if (!this.layout) return 15;
-    return Math.max(10, Math.min(21, Math.min(this.layout.width, this.layout.height) / 22));
+    const baseRadius = Math.max(
+      10,
+      Math.min(21, Math.min(this.layout.width, this.layout.height) / 22)
+    );
+    return baseRadius * (dancer?.sizeScale ?? 1);
   }
 
   stageToScreen(x, y) {
@@ -702,12 +703,28 @@ export class StageCanvas {
     floor.addColorStop(0, isDark ? "#1b2529" : "#fcfbf7");
     floor.addColorStop(1, isDark ? "#121a1e" : "#eeece5");
     context.fillStyle = floor;
-    roundedRect(context, x, y, width, height, 5);
+    traceStagePath(
+      context,
+      x,
+      y,
+      width,
+      height,
+      this.project.stageShape,
+      this.project.stageFlipped
+    );
     context.fill();
     context.restore();
 
     context.save();
-    roundedRect(context, x, y, width, height, 5);
+    traceStagePath(
+      context,
+      x,
+      y,
+      width,
+      height,
+      this.project.stageShape,
+      this.project.stageFlipped
+    );
     context.clip();
 
     if (this.gridVisible) {
@@ -746,7 +763,15 @@ export class StageCanvas {
     context.save();
     context.strokeStyle = isDark ? "#415057" : "#c9c5bb";
     context.lineWidth = 1;
-    roundedRect(context, x + 0.5, y + 0.5, width - 1, height - 1, 5);
+    traceStagePath(
+      context,
+      x + 0.5,
+      y + 0.5,
+      width - 1,
+      height - 1,
+      this.project.stageShape,
+      this.project.stageFlipped
+    );
     context.stroke();
     context.restore();
   }
@@ -775,7 +800,7 @@ export class StageCanvas {
       context.setLineDash([]);
       context.strokeStyle = hexToRgba(dancer.color, 0.38);
       context.beginPath();
-      context.arc(endPoint.x, endPoint.y, this.dancerRadius() + 4, 0, TAU);
+      context.arc(endPoint.x, endPoint.y, this.dancerRadius(dancer) + 4, 0, TAU);
       context.stroke();
       context.setLineDash([4, 5]);
     }
@@ -797,21 +822,21 @@ export class StageCanvas {
   }
 
   drawDancers() {
-    const radius = this.dancerRadius();
     for (const dancer of this.dancers) {
       if (dancer.id === this.selectedDancerId) continue;
-      this.drawDancer(dancer, radius, false);
+      this.drawDancer(dancer, this.dancerRadius(dancer), false);
     }
     const selected = this.dancers.find((dancer) => dancer.id === this.selectedDancerId);
-    if (selected) this.drawDancer(selected, radius, true);
-    this.drawRemoteDancers(radius);
+    if (selected) this.drawDancer(selected, this.dancerRadius(selected), true);
+    this.drawRemoteDancers();
   }
 
-  drawRemoteDancers(radius) {
+  drawRemoteDancers() {
     const context = this.context;
     for (const [dancerId, remote] of this.remoteDancers) {
       const dancer = this.dancers.find((item) => String(item.id) === dancerId);
       if (!dancer) continue;
+      const radius = this.dancerRadius(dancer);
       const point = this.stageToScreen(remote.position.x, remote.position.y);
       context.save();
       context.setLineDash([3, 3]);
@@ -985,6 +1010,74 @@ function roundedRect(context, x, y, width, height, radius) {
   context.roundRect(x, y, width, height, safeRadius);
 }
 
+function traceStagePath(
+  context,
+  x,
+  y,
+  width,
+  height,
+  shape = "rectangle",
+  flipped = false
+) {
+  if (shape === "circle") {
+    context.beginPath();
+    context.ellipse(
+      x + width / 2,
+      y + height / 2,
+      width / 2,
+      height / 2,
+      0,
+      0,
+      TAU
+    );
+    return;
+  }
+  if (shape === "semicircle") {
+    context.beginPath();
+    if (flipped) {
+      context.moveTo(x, y);
+      context.bezierCurveTo(
+        x,
+        y + height * 0.56,
+        x + width * 0.28,
+        y + height,
+        x + width / 2,
+        y + height
+      );
+      context.bezierCurveTo(
+        x + width * 0.72,
+        y + height,
+        x + width,
+        y + height * 0.56,
+        x + width,
+        y
+      );
+      context.closePath();
+      return;
+    }
+    context.moveTo(x, y + height);
+    context.bezierCurveTo(
+      x,
+      y + height * 0.44,
+      x + width * 0.28,
+      y,
+      x + width / 2,
+      y
+    );
+    context.bezierCurveTo(
+      x + width * 0.72,
+      y,
+      x + width,
+      y + height * 0.44,
+      x + width,
+      y + height
+    );
+    context.closePath();
+    return;
+  }
+  roundedRect(context, x, y, width, height, 5);
+}
+
 function hexToRgba(hex, alpha) {
   const normalized = hex.replace("#", "");
   const value = Number.parseInt(normalized, 16);
@@ -1010,4 +1103,32 @@ function truncateLabel(value, maxLength) {
 
 function round(value) {
   return Math.round(value * 100) / 100;
+}
+
+export function clampStagePosition(position, project) {
+  const stageWidth = project.stageWidth;
+  const stageHeight = project.stageHeight;
+  const shape = project.stageShape || "rectangle";
+  let x = Math.min(stageWidth, Math.max(0, Number(position.x)));
+  let y = Math.min(stageHeight, Math.max(0, Number(position.y)));
+  if (shape === "circle" || shape === "semicircle") {
+    const centerX = stageWidth / 2;
+    const centerY =
+      shape === "semicircle"
+        ? project.stageFlipped
+          ? 0
+          : stageHeight
+        : stageHeight / 2;
+    const radiusX = stageWidth / 2;
+    const radiusY = shape === "semicircle" ? stageHeight : stageHeight / 2;
+    const normalizedX = (x - centerX) / radiusX;
+    const normalizedY = (y - centerY) / radiusY;
+    const distance = Math.hypot(normalizedX, normalizedY);
+    if (distance > 0.995) {
+      const scale = 0.995 / distance;
+      x = centerX + normalizedX * scale * radiusX;
+      y = centerY + normalizedY * scale * radiusY;
+    }
+  }
+  return { x: round(x), y: round(y) };
 }

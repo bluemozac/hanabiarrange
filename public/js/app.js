@@ -1,6 +1,6 @@
 import { api } from "./api.js";
 import { CollaborationClient } from "./realtime.js";
-import { StageCanvas } from "./stage.js";
+import { StageCanvas, clampStagePosition } from "./stage.js";
 
 const $ = (selector) => document.querySelector(selector);
 const DEFAULT_DANCER_COLOR = "#f97316";
@@ -26,6 +26,7 @@ const elements = {
   stageCanvas: $("#stageCanvas"),
   canvasFrame: $("#canvasFrame"),
   addTextButton: $("#addTextButton"),
+  stageFlipButton: $("#stageFlipButton"),
   stageGridButton: $("#stageGridButton"),
   stageThemeButton: $("#stageThemeButton"),
   stageThemeIcon: $("#stageThemeIcon"),
@@ -50,6 +51,8 @@ const elements = {
   dancerCodeInput: $("#dancerCodeInput"),
   dancerNameInput: $("#dancerNameInput"),
   dancerColorInput: $("#dancerColorInput"),
+  dancerSizeInput: $("#dancerSizeInput"),
+  dancerSizeOutput: $("#dancerSizeOutput"),
   dancerXInput: $("#dancerXInput"),
   dancerYInput: $("#dancerYInput"),
   saveDancerButton: $("#saveDancerButton"),
@@ -69,6 +72,9 @@ const elements = {
   projectDialogTitle: $("#projectDialogTitle"),
   projectNameInput: $("#projectNameInput"),
   projectDescriptionInput: $("#projectDescriptionInput"),
+  stageShapeSelect: $("#stageShapeSelect"),
+  stageFlippedInput: $("#stageFlippedInput"),
+  defaultDancerScaleInput: $("#defaultDancerScaleInput"),
   stageRatioSelect: $("#stageRatioSelect"),
   stageWidthInput: $("#stageWidthInput"),
   stageHeightInput: $("#stageHeightInput"),
@@ -122,6 +128,7 @@ const pendingPositionChanges = new Map();
 let stageResizeState = null;
 let formationDragState = null;
 let annotationSaveTimer = null;
+let dancerSizeSaveTimer = null;
 let mobileGestureFrame = null;
 let pendingMobileGesture = null;
 let panelResizeState = null;
@@ -194,6 +201,7 @@ function bindEvents() {
   elements.annotationForm.addEventListener("submit", submitAnnotationForm);
   elements.deleteAnnotationButton.addEventListener("click", deleteSelectedAnnotation);
   elements.stageThemeButton.addEventListener("click", toggleStageTheme);
+  elements.stageFlipButton.addEventListener("click", flipStageOrientation);
   elements.stageGridButton.addEventListener("click", toggleStageGrid);
   elements.stageResizeHandle.addEventListener("pointerdown", beginStageResize);
   elements.stageResizeHandle.addEventListener("pointermove", moveStageResize);
@@ -236,6 +244,7 @@ function bindEvents() {
 
   elements.projectForm.addEventListener("submit", submitProjectForm);
   elements.stageRatioSelect.addEventListener("change", applyRatioPreset);
+  elements.stageShapeSelect.addEventListener("change", applyStageShapePreset);
   elements.stageWidthInput.addEventListener("input", detectCustomRatio);
   elements.stageHeightInput.addEventListener("input", detectCustomRatio);
 
@@ -247,6 +256,7 @@ function bindEvents() {
 
   elements.dancerXInput.addEventListener("change", updateDancerFromCoordinates);
   elements.dancerYInput.addEventListener("change", updateDancerFromCoordinates);
+  elements.dancerSizeInput.addEventListener("input", previewDancerSize);
 
   document.querySelectorAll("[data-close-dialog]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -571,14 +581,30 @@ function renderProjectMeta() {
     project?.description || (project ? "尚未填寫專案說明" : "建立舞碼專案以開始編排");
   elements.dancerCount.textContent = String(project?.dancers.length ?? 0);
   elements.stageDimensions.textContent = project
-    ? `${formatNumber(project.stageWidth)} × ${formatNumber(project.stageHeight)}`
+    ? `${stageShapeLabel(project.stageShape)}${project.stageFlipped ? "／反轉" : ""} ${formatNumber(project.stageWidth)} × ${formatNumber(project.stageHeight)}`
     : "-- × --";
 
   $("#editProjectButton").disabled = !project;
   $("#deleteProjectButton").disabled = !project;
   elements.duplicateProjectButton.disabled = !project;
+  elements.stageFlipButton.disabled = !project;
   $("#newDancerButton").disabled = !project;
   elements.exportPdfButton.disabled = !project;
+  elements.stageFlipButton.classList.toggle(
+    "is-active",
+    Boolean(project?.stageFlipped)
+  );
+  elements.stageFlipButton.setAttribute(
+    "aria-pressed",
+    String(Boolean(project?.stageFlipped))
+  );
+  elements.stageFlipButton.title = project?.stageFlipped
+    ? "恢復舞台方向"
+    : "上下反轉舞台";
+  elements.stageFlipButton.setAttribute(
+    "aria-label",
+    project?.stageFlipped ? "恢復舞台方向" : "上下反轉舞台"
+  );
 }
 
 function renderDancerList() {
@@ -663,6 +689,7 @@ function renderDancerInspector() {
     elements.dancerCodeInput,
     elements.dancerNameInput,
     elements.dancerColorInput,
+    elements.dancerSizeInput,
     elements.dancerXInput,
     elements.dancerYInput,
     elements.saveDancerButton
@@ -677,6 +704,8 @@ function renderDancerInspector() {
     elements.dancerCodeInput.value = "";
     elements.dancerNameInput.value = "";
     elements.dancerColorInput.value = "#f97316";
+    elements.dancerSizeInput.value = "100";
+    elements.dancerSizeOutput.textContent = "100%";
     elements.dancerXInput.value = "";
     elements.dancerYInput.value = "";
     return;
@@ -687,6 +716,9 @@ function renderDancerInspector() {
   elements.dancerCodeInput.value = dancer.code;
   elements.dancerNameInput.value = dancer.name;
   elements.dancerColorInput.value = safeColor(dancer.color);
+  elements.dancerSizeInput.value = String(Math.round((dancer.sizeScale ?? 1) * 100));
+  elements.dancerSizeOutput.textContent =
+    `${Math.round((dancer.sizeScale ?? 1) * 100)}%`;
   elements.dancerXInput.max = state.project.stageWidth;
   elements.dancerYInput.max = state.project.stageHeight;
   elements.dancerXInput.value = formatNumber(position.x);
@@ -1111,15 +1143,44 @@ function updateDancerFromCoordinates() {
     return;
   }
 
-  const position = {
-    x: round(Math.min(state.project.stageWidth, Math.max(0, x))),
-    y: round(Math.min(state.project.stageHeight, Math.max(0, y)))
-  };
+  const position = clampStagePosition({ x, y }, state.project);
   formation.positions[String(dancer.id)] = position;
   stage.updateDancerPosition(dancer.id, position);
   renderDancerInspector();
   renderDancerList();
   queueFormationPositionSave(formation.id, dancer.id, position);
+}
+
+function previewDancerSize() {
+  const dancer = selectedDancer();
+  if (!dancer || !state.project) return;
+  const sizeScale = Number(elements.dancerSizeInput.value) / 100;
+  dancer.sizeScale = sizeScale;
+  elements.dancerSizeOutput.textContent = `${elements.dancerSizeInput.value}%`;
+  stage.setProject(state.project);
+  setSaveState("saving", "儲存中");
+  if (dancerSizeSaveTimer) window.clearTimeout(dancerSizeSaveTimer);
+  dancerSizeSaveTimer = window.setTimeout(() => {
+    dancerSizeSaveTimer = null;
+    persistDancerSize(dancer.id, sizeScale);
+  }, 220);
+}
+
+async function persistDancerSize(dancerId, sizeScale) {
+  if (!state.project) return;
+  try {
+    const payload = await api.updateDancer(state.project.id, dancerId, {
+      sizeScale
+    });
+    const dancer = state.project.dancers.find((item) => item.id === dancerId);
+    if (dancer) Object.assign(dancer, payload.dancer);
+    stage.setProject(state.project);
+    renderDancerInspector();
+    setSaveState("saved", "已儲存");
+  } catch (error) {
+    setSaveState("error", "儲存失敗");
+    showError(error);
+  }
 }
 
 async function playCurrentTransition() {
@@ -1160,10 +1221,16 @@ function openProjectDialog(project = null) {
   elements.projectDescriptionInput.value = project?.description ?? "";
   elements.stageWidthInput.value = project?.stageWidth ?? 100;
   elements.stageHeightInput.value = project?.stageHeight ?? 56.25;
+  elements.stageShapeSelect.value = project?.stageShape ?? "rectangle";
+  elements.stageFlippedInput.checked = Boolean(project?.stageFlipped);
+  elements.defaultDancerScaleInput.value = Math.round(
+    (project?.defaultDancerScale ?? 1) * 100
+  );
   elements.stageRatioSelect.value = detectRatio(
     Number(elements.stageWidthInput.value),
     Number(elements.stageHeightInput.value)
   );
+  applyStageShapePreset();
   elements.projectDialog.showModal();
   elements.projectNameInput.focus();
 }
@@ -1175,7 +1242,10 @@ async function submitProjectForm(event) {
     name: elements.projectNameInput.value.trim(),
     description: elements.projectDescriptionInput.value.trim(),
     stageWidth: Number(elements.stageWidthInput.value),
-    stageHeight: Number(elements.stageHeightInput.value)
+    stageHeight: Number(elements.stageHeightInput.value),
+    stageShape: elements.stageShapeSelect.value,
+    stageFlipped: elements.stageFlippedInput.checked,
+    defaultDancerScale: Number(elements.defaultDancerScaleInput.value) / 100
   };
 
   try {
@@ -1192,6 +1262,7 @@ async function submitProjectForm(event) {
 }
 
 function applyRatioPreset() {
+  if (elements.stageShapeSelect.value !== "rectangle") return;
   const ratio = elements.stageRatioSelect.value;
   if (ratio === "custom") return;
   const [widthRatio, heightRatio] = ratio.split(":").map(Number);
@@ -1201,11 +1272,32 @@ function applyRatioPreset() {
 }
 
 function detectCustomRatio() {
+  if (elements.stageShapeSelect.value !== "rectangle") {
+    applyStageShapePreset();
+    return;
+  }
   const ratio = detectRatio(
     Number(elements.stageWidthInput.value),
     Number(elements.stageHeightInput.value)
   );
   elements.stageRatioSelect.value = ratio;
+}
+
+function applyStageShapePreset() {
+  const shape = elements.stageShapeSelect.value;
+  const isRectangle = shape === "rectangle";
+  elements.stageHeightInput.disabled = !isRectangle;
+  elements.stageRatioSelect.disabled = !isRectangle;
+  if (isRectangle) {
+    detectCustomRatio();
+    return;
+  }
+
+  const width = Math.max(10, Number(elements.stageWidthInput.value) || 100);
+  elements.stageWidthInput.value = width;
+  elements.stageHeightInput.value =
+    shape === "circle" ? width : round(width / 2);
+  elements.stageRatioSelect.value = shape === "circle" ? "1:1" : "custom";
 }
 
 function detectRatio(width, height) {
@@ -1215,6 +1307,14 @@ function detectRatio(width, height) {
   if (Math.abs(ratio - 4 / 3) < 0.01) return "4:3";
   if (Math.abs(ratio - 1) < 0.01) return "1:1";
   return "custom";
+}
+
+function stageShapeLabel(shape) {
+  return {
+    rectangle: "矩形",
+    circle: "圓形",
+    semicircle: "半圓"
+  }[shape] || "矩形";
 }
 
 async function deleteProject() {
@@ -1298,15 +1398,17 @@ async function submitDancerEdit(event) {
     showToast("舞者座標格式不正確", true);
     return;
   }
-  const position = {
-    x: round(Math.min(state.project.stageWidth, Math.max(0, x))),
-    y: round(Math.min(state.project.stageHeight, Math.max(0, y)))
-  };
+  const position = clampStagePosition({ x, y }, state.project);
   try {
+    if (dancerSizeSaveTimer) {
+      window.clearTimeout(dancerSizeSaveTimer);
+      dancerSizeSaveTimer = null;
+    }
     const payload = await api.updateDancer(state.project.id, dancer.id, {
       code: elements.dancerCodeInput.value.trim(),
       name: elements.dancerNameInput.value.trim(),
-      color: elements.dancerColorInput.value
+      color: elements.dancerColorInput.value,
+      sizeScale: Number(elements.dancerSizeInput.value) / 100
     });
     Object.assign(dancer, payload.dancer);
     formation.positions[String(dancer.id)] = position;
@@ -1608,6 +1710,24 @@ function toggleStageTheme() {
   state.stageTheme = state.stageTheme === "dark" ? "light" : "dark";
   writePreference(STAGE_THEME_KEY, state.stageTheme);
   applyStageAppearance();
+}
+
+async function flipStageOrientation() {
+  if (!state.project) return;
+  const projectId = state.project.id;
+  const formationId = state.selectedFormationId;
+  const dancerId = state.selectedDancerId;
+  const nextFlipped = !state.project.stageFlipped;
+  elements.stageFlipButton.disabled = true;
+  try {
+    await api.updateProject(projectId, { stageFlipped: nextFlipped });
+    await loadProject(projectId, formationId, dancerId);
+    showToast(nextFlipped ? "舞台已上下反轉" : "舞台方向已恢復");
+  } catch (error) {
+    showError(error);
+  } finally {
+    elements.stageFlipButton.disabled = !state.project;
+  }
 }
 
 function toggleStageGrid() {
