@@ -407,7 +407,7 @@ function getPanelResizeBounds(sizes) {
   const stageMinWidth = 320;
   const sidebarMin = 220;
   const inspectorMin = 220;
-  const timelineMin = 96;
+  const timelineMin = 102;
   return {
     sidebarMin,
     inspectorMin,
