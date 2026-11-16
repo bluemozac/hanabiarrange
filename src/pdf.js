@@ -29,6 +29,7 @@ async function buildProjectPdf(project, options = {}) {
 
   const document = new PDFDocument({
     size: "A4",
+    layout: mode === "simple" ? "landscape" : "portrait",
     margin: MARGIN,
     bufferPages: true,
     info: {
@@ -103,23 +104,30 @@ function boldFontCandidates() {
 
 function drawSimpleFormation(document, project, formation, index, theme) {
   if (index > 0) document.addPage();
-  document.rect(0, 0, PAGE_WIDTH, 12).fill("#eb5e35");
+  const pageWidth = document.page.width;
+  const pageHeight = document.page.height;
+  const pageMargin = 20;
+  const stageTop = 58;
+  const availableWidth = pageWidth - pageMargin * 2;
+  const availableHeight = pageHeight - stageTop - pageMargin;
+  const stage = fitRect(availableWidth, availableHeight, project.stageWidth / project.stageHeight);
+  const stageX = (pageWidth - stage.width) / 2;
+  const stageY = stageTop + (availableHeight - stage.height) / 2;
+
+  document.rect(0, 0, pageWidth, 6).fill("#eb5e35");
   setFont(document, 8, true)
     .fillColor("#8a8d89")
-    .text(`FORMATION ${String(index + 1).padStart(2, "0")}`, MARGIN, 46, {
+    .text(`FORMATION ${String(index + 1).padStart(2, "0")}`, pageMargin, 16, {
       characterSpacing: 1.2
     });
-  setFont(document, 24, true)
+  setFont(document, 17, true)
     .fillColor("#171b1f")
-    .text(formation.name, MARGIN, 68, {
-      width: CONTENT_WIDTH,
-      height: 38,
+    .text(formation.name, pageMargin, 31, {
+      width: availableWidth,
+      height: 24,
       ellipsis: true
     });
 
-  const stage = fitRect(CONTENT_WIDTH, 560, project.stageWidth / project.stageHeight);
-  const stageX = MARGIN + (CONTENT_WIDTH - stage.width) / 2;
-  const stageY = 140;
   drawStageDiagram(document, project, formation, {
     x: stageX,
     y: stageY,
