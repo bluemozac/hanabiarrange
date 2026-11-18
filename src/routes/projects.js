@@ -102,17 +102,34 @@ function createProjectsRouter(db) {
           source.defaultDancerScale
         );
       const projectId = Number(project.lastInsertRowid);
+      const teamIdMap = new Map();
+      const insertTeam = db.prepare(
+        `INSERT INTO teams (project_id, name, color, sort_order)
+         VALUES (?, ?, ?, ?)`
+      );
+      for (const team of source.teams ?? []) {
+        const result = insertTeam.run(
+          projectId,
+          team.name,
+          team.color,
+          team.sortOrder
+        );
+        teamIdMap.set(team.id, Number(result.lastInsertRowid));
+      }
       const dancerIdMap = new Map();
       const insertDancer = db.prepare(
-        `INSERT INTO dancers (project_id, code, name, color, size_scale, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?)`
+        `INSERT INTO dancers
+           (project_id, team_id, code, name, color, shape, size_scale, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       );
       for (const dancer of source.dancers) {
         const result = insertDancer.run(
           projectId,
+          teamIdMap.get(dancer.teamId) ?? null,
           dancer.code,
           dancer.name,
           dancer.color,
+          dancer.shape,
           dancer.sizeScale,
           dancer.sortOrder
         );

@@ -9,6 +9,7 @@ const STAGE_GRID_KEY = "hanabi-stage-grid";
 const STAGE_SIZE_KEY = "hanabi-stage-size";
 const PANEL_LAYOUT_KEY = "hanabi-panel-layout";
 const COLLAB_USER_KEY = "hanabi-collaboration-user";
+const TEAM_DRAG_KEY = "hanabi-team-drag";
 const mobileLayout = window.matchMedia("(max-width: 720px)");
 
 const elements = {
@@ -17,6 +18,7 @@ const elements = {
   projectTitle: $("#projectTitle"),
   dancerCount: $("#dancerCount"),
   dancerList: $("#dancerList"),
+  manageTeamsButton: $("#manageTeamsButton"),
   connectionLabel: $("#connectionLabel"),
   saveState: $("#saveState"),
   collaboratorPresence: $("#collaboratorPresence"),
@@ -26,6 +28,7 @@ const elements = {
   stageCanvas: $("#stageCanvas"),
   canvasFrame: $("#canvasFrame"),
   addTextButton: $("#addTextButton"),
+  teamDragToggle: $("#teamDragToggle"),
   stageFlipButton: $("#stageFlipButton"),
   stageGridButton: $("#stageGridButton"),
   stageThemeButton: $("#stageThemeButton"),
@@ -51,6 +54,8 @@ const elements = {
   dancerCodeInput: $("#dancerCodeInput"),
   dancerNameInput: $("#dancerNameInput"),
   dancerColorInput: $("#dancerColorInput"),
+  dancerShapeInput: $("#dancerShapeInput"),
+  dancerTeamInput: $("#dancerTeamInput"),
   dancerSizeInput: $("#dancerSizeInput"),
   dancerSizeOutput: $("#dancerSizeOutput"),
   dancerXInput: $("#dancerXInput"),
@@ -83,6 +88,23 @@ const elements = {
   newDancerCode: $("#newDancerCode"),
   newDancerName: $("#newDancerName"),
   newDancerColor: $("#newDancerColor"),
+  newDancerShape: $("#newDancerShape"),
+  newDancerTeam: $("#newDancerTeam"),
+  teamDialog: $("#teamDialog"),
+  teamNameInput: $("#teamNameInput"),
+  teamColorInput: $("#teamColorInput"),
+  addTeamButton: $("#addTeamButton"),
+  teamList: $("#teamList"),
+  selectedTeamTitle: $("#selectedTeamTitle"),
+  selectedTeamCount: $("#selectedTeamCount"),
+  selectedTeamSummary: $("#selectedTeamSummary"),
+  selectedTeamNameInput: $("#selectedTeamNameInput"),
+  selectedTeamColorInput: $("#selectedTeamColorInput"),
+  saveTeamButton: $("#saveTeamButton"),
+  teamMemberList: $("#teamMemberList"),
+  applyTeamMembersButton: $("#applyTeamMembersButton"),
+  clearTeamMembersButton: $("#clearTeamMembersButton"),
+  deleteTeamButton: $("#deleteTeamButton"),
   exportPdfButton: $("#exportPdfButton"),
   duplicateProjectButton: $("#duplicateProjectButton"),
   exportDialog: $("#exportDialog"),
@@ -107,9 +129,11 @@ const state = {
   selectedFormationId: null,
   selectedDancerId: null,
   selectedAnnotationId: null,
+  selectedTeamId: null,
   isPlaying: false,
   stageTheme: readPreference(STAGE_THEME_KEY, "light"),
-  gridVisible: readPreference(STAGE_GRID_KEY, "true") !== "false"
+  gridVisible: readPreference(STAGE_GRID_KEY, "true") !== "false",
+  teamDragEnabled: readPreference(TEAM_DRAG_KEY, "false") === "true"
 };
 
 const collaborationUser = createCollaborationUser();
@@ -127,6 +151,7 @@ let formationSaveTimer = null;
 const pendingPositionChanges = new Map();
 let stageResizeState = null;
 let formationDragState = null;
+let teamDragState = null;
 let annotationSaveTimer = null;
 let dancerSizeSaveTimer = null;
 let mobileGestureFrame = null;
@@ -163,6 +188,7 @@ async function init() {
   initializeMobilePanels();
   restorePanelLayout();
   applyStageAppearance();
+  applyTeamDragState();
   restoreStageSize();
   try {
     const payload = await api.listProjects();
@@ -194,10 +220,17 @@ function bindEvents() {
   $("#deleteProjectButton").addEventListener("click", deleteProject);
   elements.duplicateProjectButton.addEventListener("click", duplicateCurrentProject);
   $("#newDancerButton").addEventListener("click", openDancerDialog);
+  elements.manageTeamsButton.addEventListener("click", openTeamDialog);
+  elements.addTeamButton.addEventListener("click", addTeam);
+  elements.applyTeamMembersButton.addEventListener("click", applyTeamMembers);
+  elements.clearTeamMembersButton.addEventListener("click", clearTeamMembers);
+  elements.saveTeamButton.addEventListener("click", saveSelectedTeam);
+  elements.deleteTeamButton.addEventListener("click", deleteSelectedTeam);
   $("#newFormationButton").addEventListener("click", createFormationFromCurrent);
   elements.exportPdfButton.addEventListener("click", openExportDialog);
   elements.exportForm.addEventListener("submit", submitExportForm);
   elements.addTextButton.addEventListener("click", toggleAnnotationPlacement);
+  elements.teamDragToggle.addEventListener("click", toggleTeamDrag);
   elements.annotationForm.addEventListener("submit", submitAnnotationForm);
   elements.deleteAnnotationButton.addEventListener("click", deleteSelectedAnnotation);
   elements.stageThemeButton.addEventListener("click", toggleStageTheme);
@@ -269,6 +302,17 @@ function bindEvents() {
       if (event.target === dialog) dialog.close();
     });
   });
+  elements.teamList.addEventListener("click", (event) => {
+    const selectButton = event.target.closest("[data-select-team]");
+    if (selectButton) {
+      state.selectedTeamId = Number(selectButton.dataset.selectTeam);
+      renderTeamManager();
+    }
+  });
+  elements.teamList.addEventListener("pointerdown", beginTeamDrag);
+  elements.teamList.addEventListener("pointermove", moveTeamDrag);
+  elements.teamList.addEventListener("pointerup", endTeamDrag);
+  elements.teamList.addEventListener("pointercancel", cancelTeamDrag);
 }
 
 function bindPanelResizers() {
@@ -516,6 +560,12 @@ async function loadProject(projectId, preferredFormationId = null, preferredDanc
   try {
     const payload = await api.getProject(projectId);
     state.project = payload.project;
+    state.project.teams = state.project.teams ?? [];
+    state.project.dancers = state.project.dancers.map((dancer) => ({
+      ...dancer,
+      shape: dancer.shape || "circle",
+      teamId: dancer.teamId ?? null
+    }));
     state.selectedFormationId =
       state.project.formations.find((formation) => formation.id === preferredFormationId)?.id ??
       state.project.formations[0]?.id ??
@@ -559,6 +609,7 @@ function renderAll() {
   renderTransport();
   renderStats();
   updateEmptyState();
+  if (elements.teamDialog.open) renderTeamManager();
 }
 
 function renderProjectSelect(preferredId = state.project?.id) {
@@ -588,6 +639,8 @@ function renderProjectMeta() {
   $("#deleteProjectButton").disabled = !project;
   elements.duplicateProjectButton.disabled = !project;
   elements.stageFlipButton.disabled = !project;
+  elements.teamDragToggle.disabled = !project;
+  elements.manageTeamsButton.disabled = !project;
   $("#newDancerButton").disabled = !project;
   elements.exportPdfButton.disabled = !project;
   elements.stageFlipButton.classList.toggle(
@@ -616,16 +669,20 @@ function renderDancerList() {
   }
 
   const formation = selectedFormation();
+  const teamsById = new Map(
+    (project.teams ?? []).map((team) => [team.id, team])
+  );
   elements.dancerList.innerHTML = project.dancers
     .map((dancer) => {
       const position = formation?.positions[String(dancer.id)];
+      const team = teamsById.get(dancer.teamId);
       return `
         <button class="dancer-item ${dancer.id === state.selectedDancerId ? "is-selected" : ""}"
           type="button" data-dancer-id="${dancer.id}">
-          <span class="dancer-swatch" style="background:${safeColor(dancer.color)}"></span>
+          <span class="dancer-swatch dancer-swatch--${dancer.shape || "circle"}" style="background:${safeColor(dancer.color)}"></span>
           <span class="dancer-copy">
             <span class="dancer-code">${escapeHtml(dancer.code)}</span>
-            <span class="dancer-name">${escapeHtml(dancer.name || "未命名舞者")}</span>
+            <span class="dancer-name">${escapeHtml(dancer.name || "未命名舞者")}${team ? ` · ${escapeHtml(team.name)}` : ""}</span>
           </span>
           <span class="dancer-position">${position ? `${formatNumber(position.x)},${formatNumber(position.y)}` : "--"}</span>
         </button>
@@ -689,6 +746,8 @@ function renderDancerInspector() {
     elements.dancerCodeInput,
     elements.dancerNameInput,
     elements.dancerColorInput,
+    elements.dancerShapeInput,
+    elements.dancerTeamInput,
     elements.dancerSizeInput,
     elements.dancerXInput,
     elements.dancerYInput,
@@ -704,6 +763,8 @@ function renderDancerInspector() {
     elements.dancerCodeInput.value = "";
     elements.dancerNameInput.value = "";
     elements.dancerColorInput.value = "#f97316";
+    elements.dancerShapeInput.value = "circle";
+    populateTeamOptions(elements.dancerTeamInput, null);
     elements.dancerSizeInput.value = "100";
     elements.dancerSizeOutput.textContent = "100%";
     elements.dancerXInput.value = "";
@@ -716,6 +777,8 @@ function renderDancerInspector() {
   elements.dancerCodeInput.value = dancer.code;
   elements.dancerNameInput.value = dancer.name;
   elements.dancerColorInput.value = safeColor(dancer.color);
+  elements.dancerShapeInput.value = dancer.shape || "circle";
+  populateTeamOptions(elements.dancerTeamInput, dancer.teamId);
   elements.dancerSizeInput.value = String(Math.round((dancer.sizeScale ?? 1) * 100));
   elements.dancerSizeOutput.textContent =
     `${Math.round((dancer.sizeScale ?? 1) * 100)}%`;
@@ -1360,10 +1423,307 @@ async function duplicateCurrentProject() {
   }
 }
 
+function populateTeamOptions(select, selectedTeamId) {
+  const teams = state.project?.teams ?? [];
+  select.innerHTML =
+    '<option value="">未分配</option>' +
+    teams
+      .map(
+        (team) =>
+          `<option value="${team.id}">${escapeHtml(team.name)}</option>`
+      )
+      .join("");
+  select.value = selectedTeamId ? String(selectedTeamId) : "";
+}
+
+function openTeamDialog() {
+  if (!state.project) return;
+  if (!state.project.teams.some((team) => team.id === state.selectedTeamId)) {
+    state.selectedTeamId = state.project.teams[0]?.id ?? null;
+  }
+  elements.teamNameInput.value = "";
+  elements.teamColorInput.value = nextTeamColor();
+  elements.teamDialog.showModal();
+  renderTeamManager();
+  elements.teamNameInput.focus();
+}
+
+function renderTeamManager() {
+  if (!state.project || !elements.teamDialog.open) return;
+  const teams = state.project.teams ?? [];
+  if (!teams.some((team) => team.id === state.selectedTeamId)) {
+    state.selectedTeamId = teams[0]?.id ?? null;
+  }
+  elements.teamList.innerHTML =
+    teams.length > 0
+      ? teams
+          .map(
+            (team) => `
+              <div class="team-card ${team.id === state.selectedTeamId ? "is-selected" : ""}"
+                data-team-id="${team.id}">
+                <button class="team-drag-handle" type="button"
+                  data-drag-team-id="${team.id}" title="拖曳調整隊伍順序" aria-label="拖曳調整 ${escapeHtml(team.name)} 的順序">
+                  <svg><use href="#icon-grip"></use></svg>
+                </button>
+                <button class="team-select-button" type="button" data-select-team="${team.id}">
+                  <span class="team-color-dot" style="background:${safeColor(team.color)}"></span>
+                  <span class="team-select-name">${escapeHtml(team.name)}</span>
+                  <span class="team-select-count">${team.memberCount}</span>
+                </button>
+              </div>
+            `
+          )
+          .join("")
+      : '<p class="team-empty">尚未建立隊伍</p>';
+
+  const selectedTeam = teams.find((team) => team.id === state.selectedTeamId);
+  elements.selectedTeamTitle.textContent = selectedTeam?.name ?? "尚未選擇隊伍";
+  elements.selectedTeamNameInput.value = selectedTeam?.name ?? "";
+  elements.selectedTeamColorInput.value = safeColor(
+    selectedTeam?.color ?? "#0ea5e9"
+  );
+  elements.selectedTeamCount.textContent =
+    `${selectedTeam?.memberCount ?? 0} 人`;
+  elements.selectedTeamSummary.textContent = selectedTeam
+    ? "勾選舞者後套用批次成員變更"
+    : "先新增隊伍才能批次加入舞者";
+
+  elements.teamMemberList.innerHTML = selectedTeam
+    ? state.project.dancers
+        .map((dancer) => {
+          const currentTeam = teams.find((team) => team.id === dancer.teamId);
+          return `
+            <label class="team-member-item">
+              <input type="checkbox" value="${dancer.id}" ${dancer.teamId === selectedTeam.id ? "checked" : ""} />
+              <span class="team-member-swatch" style="background:${safeColor(dancer.color)}"></span>
+              <span class="team-member-copy">
+                <strong>${escapeHtml(dancer.code)}</strong>
+                <small>${escapeHtml(dancer.name || "未命名舞者")}${currentTeam && currentTeam.id !== selectedTeam.id ? ` · ${escapeHtml(currentTeam.name)}` : ""}</small>
+              </span>
+            </label>
+          `;
+        })
+        .join("") || '<p class="team-empty">尚未新增舞者</p>'
+    : "";
+
+  const hasTeam = Boolean(selectedTeam);
+  elements.applyTeamMembersButton.disabled = !hasTeam;
+  elements.clearTeamMembersButton.disabled = !hasTeam;
+  elements.deleteTeamButton.disabled = !hasTeam;
+  elements.saveTeamButton.disabled = !hasTeam;
+  elements.selectedTeamNameInput.disabled = !hasTeam;
+  elements.selectedTeamColorInput.disabled = !hasTeam;
+}
+
+async function addTeam() {
+  if (!state.project) return;
+  const name = elements.teamNameInput.value.trim();
+  if (!name) {
+    showToast("請輸入隊伍名稱", true);
+    return;
+  }
+  try {
+    const payload = await api.createTeam(state.project.id, {
+      name,
+      color: elements.teamColorInput.value
+    });
+    state.project.teams.push(payload.team);
+    state.project.teams.sort((a, b) => a.sortOrder - b.sortOrder);
+    state.selectedTeamId = payload.team.id;
+    elements.teamNameInput.value = "";
+    elements.teamColorInput.value = nextTeamColor();
+    renderTeamManager();
+    renderDancerInspector();
+    showToast("隊伍已新增");
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function saveSelectedTeam() {
+  const team = state.project?.teams.find(
+    (item) => item.id === state.selectedTeamId
+  );
+  if (!team) return;
+  const name = elements.selectedTeamNameInput.value.trim();
+  if (!name) {
+    showToast("請輸入隊伍名稱", true);
+    return;
+  }
+  try {
+    const payload = await api.updateTeam(state.project.id, team.id, {
+      name,
+      color: elements.selectedTeamColorInput.value
+    });
+    Object.assign(team, payload.team);
+    renderTeamManager();
+    renderDancerList();
+    renderDancerInspector();
+    showToast("隊伍資料已更新");
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function applyTeamMembers() {
+  const team = state.project?.teams.find(
+    (item) => item.id === state.selectedTeamId
+  );
+  if (!team) return;
+  const dancerIds = [...elements.teamMemberList.querySelectorAll('input[type="checkbox"]:checked')].map(
+    (input) => Number(input.value)
+  );
+  await updateTeamMembers(team.id, dancerIds);
+}
+
+async function clearTeamMembers() {
+  const team = state.project?.teams.find(
+    (item) => item.id === state.selectedTeamId
+  );
+  if (!team) return;
+  await updateTeamMembers(team.id, []);
+}
+
+async function updateTeamMembers(teamId, dancerIds) {
+  try {
+    const payload = await api.setTeamMembers(state.project.id, teamId, dancerIds);
+    state.project.teams = payload.teams;
+    state.project.dancers = payload.dancers;
+    renderAll();
+    renderTeamManager();
+    showToast("隊伍成員已更新");
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function deleteSelectedTeam() {
+  const team = state.project?.teams.find(
+    (item) => item.id === state.selectedTeamId
+  );
+  if (!team) return;
+  if (!window.confirm(`確定刪除隊伍「${team.name}」？舞者會保留並移到未分配。`)) {
+    return;
+  }
+  try {
+    await api.deleteTeam(state.project.id, team.id);
+    state.project.teams = state.project.teams.filter((item) => item.id !== team.id);
+    state.project.dancers.forEach((dancer) => {
+      if (dancer.teamId === team.id) dancer.teamId = null;
+    });
+    state.selectedTeamId = state.project.teams[0]?.id ?? null;
+    renderAll();
+    renderTeamManager();
+    showToast("隊伍已刪除");
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function beginTeamDrag(event) {
+  const handle = event.target.closest("[data-drag-team-id]");
+  if (!handle || !state.project) return;
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  const card = handle.closest("[data-team-id]");
+  if (!card) return;
+  event.preventDefault();
+  event.stopPropagation();
+  teamDragState = {
+    pointerId: event.pointerId,
+    teamId: Number(handle.dataset.dragTeamId),
+    card,
+    handle,
+    startY: event.clientY,
+    startOrder: state.project.teams.map((team) => team.id),
+    moved: false
+  };
+  handle.setPointerCapture(event.pointerId);
+  elements.teamList.classList.add("is-sorting");
+  card.classList.add("is-dragging");
+}
+
+function moveTeamDrag(event) {
+  if (!teamDragState || teamDragState.pointerId !== event.pointerId) return;
+  if (!teamDragState.moved && Math.abs(event.clientY - teamDragState.startY) < 4) {
+    return;
+  }
+  event.preventDefault();
+  teamDragState.moved = true;
+  const cards = [...elements.teamList.querySelectorAll(".team-card:not(.is-dragging)")];
+  const reference = cards.find((card) => {
+    const rect = card.getBoundingClientRect();
+    return event.clientY < rect.top + rect.height / 2;
+  });
+  if (reference) {
+    elements.teamList.insertBefore(teamDragState.card, reference);
+  } else {
+    elements.teamList.append(teamDragState.card);
+  }
+}
+
+function endTeamDrag(event) {
+  if (!teamDragState || teamDragState.pointerId !== event.pointerId) return;
+  const drag = teamDragState;
+  teamDragState = null;
+  elements.teamList.classList.remove("is-sorting");
+  drag.card.classList.remove("is-dragging");
+  if (drag.handle.hasPointerCapture(event.pointerId)) {
+    drag.handle.releasePointerCapture(event.pointerId);
+  }
+  if (!drag.moved) return;
+  const teamIds = [...elements.teamList.querySelectorAll("[data-team-id]")].map(
+    (card) => Number(card.dataset.teamId)
+  );
+  if (teamIds.every((id, index) => id === drag.startOrder[index])) return;
+  applyTeamOrder(teamIds);
+  persistTeamOrder(teamIds);
+}
+
+function cancelTeamDrag(event) {
+  if (!teamDragState || teamDragState.pointerId !== event.pointerId) return;
+  const drag = teamDragState;
+  teamDragState = null;
+  elements.teamList.classList.remove("is-sorting");
+  drag.card.classList.remove("is-dragging");
+  if (drag.handle.hasPointerCapture(event.pointerId)) {
+    drag.handle.releasePointerCapture(event.pointerId);
+  }
+  applyTeamOrder(drag.startOrder);
+}
+
+function applyTeamOrder(teamIds) {
+  if (!state.project) return;
+  const byId = new Map(state.project.teams.map((team) => [team.id, team]));
+  state.project.teams = teamIds.map((teamId, index) => ({
+    ...byId.get(teamId),
+    sortOrder: index
+  }));
+  renderTeamManager();
+}
+
+async function persistTeamOrder(teamIds) {
+  try {
+    const payload = await api.reorderTeams(state.project.id, teamIds);
+    state.project.teams = payload.teams;
+    renderTeamManager();
+    showToast("隊伍順序已更新");
+  } catch (error) {
+    showError(error);
+    await loadProject(state.project.id, state.selectedFormationId);
+  }
+}
+
+function nextTeamColor() {
+  const palette = ["#0ea5e9", "#14b8a6", "#ec4899", "#8b5cf6", "#f59e0b", "#22c55e"];
+  return palette[(state.project?.teams.length ?? 0) % palette.length];
+}
+
 function openDancerDialog() {
   if (!state.project) return;
   elements.dancerDialogForm.reset();
   elements.newDancerColor.value = DEFAULT_DANCER_COLOR;
+  elements.newDancerShape.value = "circle";
+  populateTeamOptions(elements.newDancerTeam, null);
   elements.dancerDialog.showModal();
   elements.newDancerCode.focus();
 }
@@ -1375,7 +1735,11 @@ async function submitDancerForm(event) {
     const payload = await api.createDancer(state.project.id, {
       code: elements.newDancerCode.value.trim(),
       name: elements.newDancerName.value.trim(),
-      color: elements.newDancerColor.value
+      color: elements.newDancerColor.value,
+      shape: elements.newDancerShape.value,
+      teamId: elements.newDancerTeam.value
+        ? Number(elements.newDancerTeam.value)
+        : null
     });
     const formationId = state.selectedFormationId;
     elements.dancerDialog.close();
@@ -1408,6 +1772,10 @@ async function submitDancerEdit(event) {
       code: elements.dancerCodeInput.value.trim(),
       name: elements.dancerNameInput.value.trim(),
       color: elements.dancerColorInput.value,
+      shape: elements.dancerShapeInput.value,
+      teamId: elements.dancerTeamInput.value
+        ? Number(elements.dancerTeamInput.value)
+        : null,
       sizeScale: Number(elements.dancerSizeInput.value) / 100
     });
     Object.assign(dancer, payload.dancer);
@@ -1728,6 +2096,36 @@ async function flipStageOrientation() {
   } finally {
     elements.stageFlipButton.disabled = !state.project;
   }
+}
+
+function toggleTeamDrag() {
+  state.teamDragEnabled = !state.teamDragEnabled;
+  writePreference(TEAM_DRAG_KEY, String(state.teamDragEnabled));
+  applyTeamDragState();
+  showToast(
+    state.teamDragEnabled
+      ? "隊伍同步拖曳已開啟"
+      : "隊伍同步拖曳已關閉"
+  );
+}
+
+function applyTeamDragState() {
+  stage.setTeamDragEnabled(state.teamDragEnabled);
+  elements.teamDragToggle.classList.toggle(
+    "is-active",
+    state.teamDragEnabled
+  );
+  elements.teamDragToggle.setAttribute(
+    "aria-pressed",
+    String(state.teamDragEnabled)
+  );
+  elements.teamDragToggle.title = state.teamDragEnabled
+    ? "關閉隊伍同步拖曳"
+    : "開啟隊伍同步拖曳";
+  elements.teamDragToggle.setAttribute(
+    "aria-label",
+    state.teamDragEnabled ? "關閉隊伍同步拖曳" : "開啟隊伍同步拖曳"
+  );
 }
 
 function toggleStageGrid() {

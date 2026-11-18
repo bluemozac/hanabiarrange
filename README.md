@@ -10,6 +10,10 @@
 - 舞台可上下反轉，半圓形可切換直邊或弧邊面向觀眾席
 - 舞者代號、名稱、代表顏色的管理
 - 舞者可個別調整大小，新舞者會繼承專案預設大小
+- 舞者可選圓形、方形、菱形、三角形
+- 隊伍可新增、改名、刪除及拖曳排序
+- 隊伍成員可批次加入、移出與清空
+- 可開啟隊伍同步拖曳，保持同隊舞者的相對隊形一起移動
 - 多隊形時間軸與進場過渡秒數
 - 時間軸隊形可透過拖曳把手調整演出順序
 - Canvas 滑鼠／觸控拖曳；手機單指可上下捲動頁面及左右平移放大舞台，雙指可縮放與平移
@@ -136,7 +140,7 @@ sudo systemctl reload nginx
 
 ## 資料模型
 
-`projects` 是一首舞曲或一個演出專案，保存舞台形狀、寬高與新舞者預設大小。`dancers` 隸屬於專案，保存個別大小比例，舞者代號在單一專案內唯一。`formations` 保存隊形順序、過渡秒數與 `positions_json`。
+`projects` 是一首舞曲或一個演出專案，保存舞台形狀、寬高與新舞者預設大小。`teams` 保存專案內的隊伍名稱、顏色與排序。`dancers` 隸屬於專案與可選隊伍，保存形狀、個別大小比例，舞者代號在單一專案內唯一。`formations` 保存隊形順序、過渡秒數與 `positions_json`。
 
 `positions_json` 的結構如下，鍵是舞者資料庫 ID：
 
@@ -169,6 +173,12 @@ sudo systemctl reload nginx
 | `POST` | `/api/projects/:projectId/dancers` | 新增舞者 |
 | `PATCH` | `/api/projects/:projectId/dancers/:dancerId` | 編輯舞者 |
 | `DELETE` | `/api/projects/:projectId/dancers/:dancerId` | 刪除舞者 |
+| `GET` | `/api/projects/:projectId/teams` | 隊伍列表 |
+| `POST` | `/api/projects/:projectId/teams` | 新增隊伍 |
+| `PATCH` | `/api/projects/:projectId/teams/:teamId` | 更新隊伍 |
+| `DELETE` | `/api/projects/:projectId/teams/:teamId` | 刪除隊伍 |
+| `PUT` | `/api/projects/:projectId/teams/reorder` | 批次調整隊伍順序 |
+| `PUT` | `/api/projects/:projectId/teams/:teamId/members` | 批次設定隊伍成員 |
 | `GET` | `/api/projects/:projectId/formations` | 隊形列表 |
 | `POST` | `/api/projects/:projectId/formations` | 新增隊形 |
 | `PUT` | `/api/projects/:projectId/formations/reorder` | 批次調整隊形順序 |

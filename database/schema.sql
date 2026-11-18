@@ -15,17 +15,33 @@ CREATE TABLE IF NOT EXISTS projects (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS teams (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL,
+  name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 60),
+  color TEXT NOT NULL DEFAULT '#0ea5e9',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+  UNIQUE (project_id, name)
+);
+
 CREATE TABLE IF NOT EXISTS dancers (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   project_id INTEGER NOT NULL,
+  team_id INTEGER,
   code TEXT NOT NULL CHECK (length(trim(code)) BETWEEN 1 AND 20),
   name TEXT NOT NULL DEFAULT '',
   color TEXT NOT NULL DEFAULT '#f97316',
+  shape TEXT NOT NULL DEFAULT 'circle'
+    CHECK (shape IN ('circle', 'square', 'diamond', 'triangle')),
   size_scale REAL NOT NULL DEFAULT 1 CHECK (size_scale BETWEEN 0.5 AND 2),
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE SET NULL,
   UNIQUE (project_id, code)
 );
 
@@ -45,6 +61,9 @@ CREATE TABLE IF NOT EXISTS formations (
 
 CREATE INDEX IF NOT EXISTS idx_dancers_project
   ON dancers(project_id, sort_order, id);
+
+CREATE INDEX IF NOT EXISTS idx_teams_project_order
+  ON teams(project_id, sort_order, id);
 
 CREATE INDEX IF NOT EXISTS idx_formations_project_sequence
   ON formations(project_id, sequence_index);

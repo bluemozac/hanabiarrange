@@ -16,6 +16,8 @@ export class StageCanvas {
     this.selectedDancerId = null;
     this.selectedAnnotationId = null;
     this.draggingDancerId = null;
+    this.dancerDragGroup = null;
+    this.teamDragEnabled = false;
     this.draggingAnnotationId = null;
     this.annotationDragState = null;
     this.touchPoints = new Map();
@@ -92,6 +94,10 @@ export class StageCanvas {
   setTextPlacementMode(active) {
     this.textPlacementMode = Boolean(active);
     this.canvas.style.cursor = this.textPlacementMode ? "text" : "default";
+  }
+
+  setTeamDragEnabled(enabled) {
+    this.teamDragEnabled = Boolean(enabled);
   }
 
   updateAnnotationPosition(annotationId, position) {
@@ -276,6 +282,19 @@ export class StageCanvas {
     event.preventDefault();
     this.selectedAnnotationId = null;
     this.draggingDancerId = hit.id;
+    const groupDancers =
+      this.teamDragEnabled && hit.teamId
+        ? this.dancers.filter((dancer) => dancer.teamId === hit.teamId)
+        : [hit];
+    this.dancerDragGroup = {
+      startPoint: { x: point.x, y: point.y },
+      positions: Object.fromEntries(
+        groupDancers.map((dancer) => [
+          dancer.id,
+          { ...this.displayPositions[String(dancer.id)] }
+        ])
+      )
+    };
     this.selectedDancerId = hit.id;
     this.canvas.setPointerCapture(event.pointerId);
     this.canvas.style.cursor = "grabbing";
@@ -284,10 +303,15 @@ export class StageCanvas {
 
   beginMobileStageGesture() {
     if (this.draggingDancerId) {
-      this.callbacks.onPositionCommit?.(
-        this.draggingDancerId,
-        this.displayPositions[this.draggingDancerId]
-      );
+      const dancerIds = this.dancerDragGroup
+        ? Object.keys(this.dancerDragGroup.positions).map(Number)
+        : [this.draggingDancerId];
+      for (const dancerId of dancerIds) {
+        this.callbacks.onPositionCommit?.(
+          dancerId,
+          this.displayPositions[dancerId]
+        );
+      }
     }
     if (this.draggingAnnotationId) {
       const annotation = this.annotations.find(
@@ -301,6 +325,7 @@ export class StageCanvas {
       }
     }
     this.draggingDancerId = null;
+    this.dancerDragGroup = null;
     this.draggingAnnotationId = null;
     this.annotationDragState = null;
 
@@ -414,9 +439,31 @@ export class StageCanvas {
 
     if (this.draggingDancerId) {
       event.preventDefault();
-      const position = clampStagePosition(point, this.project);
-      this.displayPositions[this.draggingDancerId] = position;
-      this.callbacks.onPositionChange?.(this.draggingDancerId, position);
+      if (this.dancerDragGroup) {
+        const requestedDelta = {
+          x: point.x - this.dancerDragGroup.startPoint.x,
+          y: point.y - this.dancerDragGroup.startPoint.y
+        };
+        const delta = constrainGroupDelta(
+          this.dancerDragGroup.positions,
+          requestedDelta,
+          this.project
+        );
+        for (const [dancerId, startPosition] of Object.entries(
+          this.dancerDragGroup.positions
+        )) {
+          const position = {
+            x: round(startPosition.x + delta.x),
+            y: round(startPosition.y + delta.y)
+          };
+          this.displayPositions[dancerId] = position;
+          this.callbacks.onPositionChange?.(Number(dancerId), position);
+        }
+      } else {
+        const position = clampStagePosition(point, this.project);
+        this.displayPositions[this.draggingDancerId] = position;
+        this.callbacks.onPositionChange?.(this.draggingDancerId, position);
+      }
       this.draw();
       return;
     }
@@ -481,13 +528,21 @@ export class StageCanvas {
     }
 
     if (!this.draggingDancerId) return;
-    const dancerId = this.draggingDancerId;
+    const dancerIds = this.dancerDragGroup
+      ? Object.keys(this.dancerDragGroup.positions).map(Number)
+      : [this.draggingDancerId];
     this.draggingDancerId = null;
+    this.dancerDragGroup = null;
     this.canvas.style.cursor = this.hoveredDancerId ? "grab" : "default";
     if (this.canvas.hasPointerCapture(event.pointerId)) {
       this.canvas.releasePointerCapture(event.pointerId);
     }
-    this.callbacks.onPositionCommit?.(dancerId, this.displayPositions[dancerId]);
+    for (const dancerId of dancerIds) {
+      this.callbacks.onPositionCommit?.(
+        dancerId,
+        this.displayPositions[dancerId]
+      );
+    }
   }
 
   eventToStage(event) {
@@ -843,8 +898,13 @@ export class StageCanvas {
       context.lineWidth = 2.5;
       context.strokeStyle = remote.user.color;
       context.fillStyle = hexToRgba(dancer.color, 0.76);
-      context.beginPath();
-      context.arc(point.x, point.y, radius + 3, 0, TAU);
+      traceDancerShape(
+        context,
+        point.x,
+        point.y,
+        radius + 3,
+        dancer.shape
+      );
       context.fill();
       context.stroke();
       context.setLineDash([]);
@@ -890,8 +950,7 @@ export class StageCanvas {
     context.shadowBlur = 9;
     context.shadowOffsetY = 3;
     context.fillStyle = dancer.color;
-    context.beginPath();
-    context.arc(point.x, point.y, radius, 0, TAU);
+    traceDancerShape(context, point.x, point.y, radius, dancer.shape);
     context.fill();
     context.shadowColor = "transparent";
 
@@ -901,8 +960,13 @@ export class StageCanvas {
         ? "#ffffff"
         : "#171b1f"
       : "rgba(255, 255, 255, 0.9)";
-    context.beginPath();
-    context.arc(point.x, point.y, radius - (selected ? 1 : 0), 0, TAU);
+    traceDancerShape(
+      context,
+      point.x,
+      point.y,
+      radius - (selected ? 1 : 0),
+      dancer.shape
+    );
     context.stroke();
 
     const textColor = contrastColor(dancer.color);
@@ -1078,6 +1142,31 @@ function traceStagePath(
   roundedRect(context, x, y, width, height, 5);
 }
 
+function traceDancerShape(context, x, y, radius, shape = "circle") {
+  context.beginPath();
+  if (shape === "square") {
+    const side = radius * 1.72;
+    context.rect(x - side / 2, y - side / 2, side, side);
+    return;
+  }
+  if (shape === "diamond") {
+    context.moveTo(x, y - radius);
+    context.lineTo(x + radius, y);
+    context.lineTo(x, y + radius);
+    context.lineTo(x - radius, y);
+    context.closePath();
+    return;
+  }
+  if (shape === "triangle") {
+    context.moveTo(x, y - radius);
+    context.lineTo(x + radius * 0.9, y + radius * 0.72);
+    context.lineTo(x - radius * 0.9, y + radius * 0.72);
+    context.closePath();
+    return;
+  }
+  context.arc(x, y, radius, 0, TAU);
+}
+
 function hexToRgba(hex, alpha) {
   const normalized = hex.replace("#", "");
   const value = Number.parseInt(normalized, 16);
@@ -1131,4 +1220,63 @@ export function clampStagePosition(position, project) {
     }
   }
   return { x: round(x), y: round(y) };
+}
+
+function constrainGroupDelta(positions, requestedDelta, project) {
+  const fits = (scale) =>
+    Object.values(positions).every(
+      (position) =>
+        position &&
+        isPointInsideStage(
+          {
+            x: position.x + requestedDelta.x * scale,
+            y: position.y + requestedDelta.y * scale
+          },
+          project
+        )
+    );
+  if (fits(1)) {
+    return {
+      x: round(requestedDelta.x),
+      y: round(requestedDelta.y)
+    };
+  }
+
+  let low = 0;
+  let high = 1;
+  for (let index = 0; index < 24; index += 1) {
+    const middle = (low + high) / 2;
+    if (fits(middle)) low = middle;
+    else high = middle;
+  }
+  return {
+    x: round(requestedDelta.x * low),
+    y: round(requestedDelta.y * low)
+  };
+}
+
+function isPointInsideStage(position, project) {
+  const { stageWidth, stageHeight } = project;
+  if (
+    position.x < 0 ||
+    position.x > stageWidth ||
+    position.y < 0 ||
+    position.y > stageHeight
+  ) {
+    return false;
+  }
+  const shape = project.stageShape || "rectangle";
+  if (shape !== "circle" && shape !== "semicircle") return true;
+  const centerX = stageWidth / 2;
+  const centerY =
+    shape === "semicircle"
+      ? project.stageFlipped
+        ? 0
+        : stageHeight
+      : stageHeight / 2;
+  const radiusX = stageWidth / 2;
+  const radiusY = shape === "semicircle" ? stageHeight : stageHeight / 2;
+  const normalizedX = (position.x - centerX) / radiusX;
+  const normalizedY = (position.y - centerY) / radiusY;
+  return normalizedX ** 2 + normalizedY ** 2 <= 1.0001;
 }

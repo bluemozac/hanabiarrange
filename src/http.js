@@ -68,6 +68,14 @@ function validBoolean(value, label, fallback = false) {
   return value;
 }
 
+function validDancerShape(value, fallback = "circle") {
+  if (value === undefined) return fallback;
+  if (!["circle", "square", "diamond", "triangle"].includes(value)) {
+    throw new ApiError(400, "舞者形狀必須是 circle、square、diamond 或 triangle");
+  }
+  return value;
+}
+
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -85,6 +93,7 @@ module.exports = {
   colorHex,
   validStageShape,
   validBoolean,
+  validDancerShape,
   isPlainObject,
   notFound
 };

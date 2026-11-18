@@ -5,6 +5,7 @@ const { getPdfFontStatus } = require("./pdf");
 const createProjectsRouter = require("./routes/projects");
 const createDancersRouter = require("./routes/dancers");
 const createFormationsRouter = require("./routes/formations");
+const createTeamsRouter = require("./routes/teams");
 
 function createApp(db) {
   const app = express();
@@ -22,6 +23,7 @@ function createApp(db) {
 
   app.use("/api/projects", createProjectsRouter(db));
   app.use("/api/projects/:projectId/dancers", createDancersRouter(db));
+  app.use("/api/projects/:projectId/teams", createTeamsRouter(db));
   app.use("/api/projects/:projectId/formations", createFormationsRouter(db));
   app.use(express.static(path.join(__dirname, "..", "public")));
 

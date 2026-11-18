@@ -22,11 +22,24 @@ function mapDancer(row) {
   return {
     id: row.id,
     projectId: row.project_id,
+    teamId: row.team_id,
     code: row.code,
     name: row.name,
     color: row.color,
+    shape: row.shape || "circle",
     sizeScale: row.size_scale ?? 1,
     sortOrder: row.sort_order
+  };
+}
+
+function mapTeam(row) {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    name: row.name,
+    color: row.color,
+    sortOrder: row.sort_order,
+    memberCount: row.member_count ?? 0
   };
 }
 
@@ -137,11 +150,22 @@ function getProject(db, projectId) {
     .prepare("SELECT * FROM formations WHERE project_id = ? ORDER BY sequence_index, id")
     .all(projectId)
     .map(mapFormation);
+  const teams = db
+    .prepare(
+      `SELECT t.*,
+        (SELECT COUNT(*) FROM dancers d WHERE d.team_id = t.id) AS member_count
+       FROM teams t
+       WHERE t.project_id = ?
+       ORDER BY t.sort_order, t.id`
+    )
+    .all(projectId)
+    .map(mapTeam);
 
   return {
     ...mapProjectSummary(projectRow),
     dancers,
-    formations
+    formations,
+    teams
   };
 }
 
@@ -297,6 +321,7 @@ function touchProject(db, projectId) {
 module.exports = {
   mapProjectSummary,
   mapDancer,
+  mapTeam,
   mapFormation,
   getProjectRow,
   requireProjectRow,

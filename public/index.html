@@ -74,6 +74,11 @@
       <symbol id="icon-flip-vertical" viewBox="0 0 24 24">
         <path d="M12 3v18M8 7l4-4 4 4M8 17l4 4 4-4" />
       </symbol>
+      <symbol id="icon-users" viewBox="0 0 24 24">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+      </symbol>
     </svg>
 
     <div class="app-shell">
@@ -103,9 +108,14 @@
         <section class="side-section side-section--dancers">
           <div class="section-heading">
             <span>舞者 <span class="count-badge" id="dancerCount">0</span></span>
-            <button class="icon-button icon-button--light" id="newDancerButton" type="button" title="新增舞者" aria-label="新增舞者">
-              <svg><use href="#icon-plus"></use></svg>
-            </button>
+            <div class="section-heading-actions">
+              <button class="icon-button icon-button--light" id="manageTeamsButton" type="button" title="隊伍管理" aria-label="隊伍管理">
+                <svg><use href="#icon-users"></use></svg>
+              </button>
+              <button class="icon-button icon-button--light" id="newDancerButton" type="button" title="新增舞者" aria-label="新增舞者">
+                <svg><use href="#icon-plus"></use></svg>
+              </button>
+            </div>
           </div>
           <div class="dancer-list" id="dancerList"></div>
         </section>
@@ -157,6 +167,9 @@
               <div class="stage-toolbar-controls">
                 <button class="icon-button view-toggle" id="addTextButton" type="button" title="加入文字注解" aria-label="加入文字注解" aria-pressed="false">
                   <svg><use href="#icon-text"></use></svg>
+                </button>
+                <button class="icon-button view-toggle" id="teamDragToggle" type="button" title="隊伍同步拖曳" aria-label="隊伍同步拖曳" aria-pressed="false">
+                  <svg><use href="#icon-users"></use></svg>
                 </button>
                 <button class="icon-button view-toggle" id="stageFlipButton" type="button" title="上下反轉舞台" aria-label="上下反轉舞台" aria-pressed="false">
                   <svg><use href="#icon-flip-vertical"></use></svg>
@@ -274,6 +287,23 @@
                   <span>名稱</span>
                   <input id="dancerNameInput" name="name" type="text" maxlength="80" disabled />
                 </label>
+                <div class="field-row">
+                  <label class="field">
+                    <span>舞者形狀</span>
+                    <select id="dancerShapeInput" disabled>
+                      <option value="circle">圓形</option>
+                      <option value="square">方形</option>
+                      <option value="diamond">菱形</option>
+                      <option value="triangle">三角形</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>所屬隊伍</span>
+                    <select id="dancerTeamInput" disabled>
+                      <option value="">未分配</option>
+                    </select>
+                  </label>
+                </div>
                 <label class="field range-field">
                   <span>舞者大小 <output id="dancerSizeOutput">100%</output></span>
                   <input id="dancerSizeInput" type="range" min="50" max="200" step="5" value="100" disabled />
@@ -425,11 +455,81 @@
           <span>舞者名稱</span>
           <input id="newDancerName" type="text" maxlength="80" placeholder="選填" />
         </label>
+        <div class="field-row">
+          <label class="field">
+            <span>舞者形狀</span>
+            <select id="newDancerShape">
+              <option value="circle">圓形</option>
+              <option value="square">方形</option>
+              <option value="diamond">菱形</option>
+              <option value="triangle">三角形</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>所屬隊伍</span>
+            <select id="newDancerTeam">
+              <option value="">未分配</option>
+            </select>
+          </label>
+        </div>
         <div class="modal-actions">
           <button class="ghost-button" type="button" data-close-dialog="dancerDialog">取消</button>
           <button class="primary-button" type="submit">新增舞者</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog class="modal modal--teams" id="teamDialog">
+      <div class="modal-form">
+        <div class="modal-header">
+          <div>
+            <p class="panel-label">TEAMS</p>
+            <h2>隊伍管理</h2>
+          </div>
+          <button class="icon-button modal-close" type="button" data-close-dialog="teamDialog" title="關閉" aria-label="關閉">
+            <svg><use href="#icon-x"></use></svg>
+          </button>
+        </div>
+        <div class="team-create-bar">
+          <input id="teamNameInput" type="text" maxlength="60" placeholder="新隊伍名稱" />
+          <input id="teamColorInput" class="color-input" type="color" value="#0ea5e9" />
+          <button class="primary-button" id="addTeamButton" type="button">
+            <svg><use href="#icon-plus"></use></svg>
+            新增隊伍
+          </button>
+        </div>
+        <div class="team-manager-grid">
+          <section class="team-list-column">
+            <p class="panel-label">TEAM ORDER</p>
+            <div class="team-list" id="teamList"></div>
+          </section>
+          <section class="team-members-column">
+            <div class="team-member-heading">
+              <div>
+                <p class="panel-label">MEMBERS</p>
+                <h3 id="selectedTeamTitle">尚未選擇隊伍</h3>
+              </div>
+              <span class="team-member-count" id="selectedTeamCount">0 人</span>
+            </div>
+            <div class="team-edit-row">
+              <input id="selectedTeamNameInput" type="text" maxlength="60" placeholder="隊伍名稱" />
+              <input id="selectedTeamColorInput" class="color-input" type="color" value="#0ea5e9" />
+              <button class="secondary-button secondary-button--compact" id="saveTeamButton" type="button">更新</button>
+            </div>
+            <p class="team-member-hint" id="selectedTeamSummary">選擇舞者後套用批次成員變更</p>
+            <div class="team-member-list" id="teamMemberList"></div>
+            <div class="team-member-actions">
+              <button class="ghost-button" id="clearTeamMembersButton" type="button">清空成員</button>
+              <button class="primary-button" id="applyTeamMembersButton" type="button">套用成員</button>
+            </div>
+          </section>
+        </div>
+        <div class="modal-actions">
+          <button class="danger-text-button" id="deleteTeamButton" type="button">刪除目前隊伍</button>
+          <span class="modal-action-spacer"></span>
+          <button class="secondary-button" type="button" data-close-dialog="teamDialog">完成</button>
+        </div>
+      </div>
     </dialog>
 
     <dialog class="modal modal--compact" id="exportDialog">

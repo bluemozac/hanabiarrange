@@ -77,6 +77,19 @@ function migrateDatabase(db) {
        CHECK (size_scale BETWEEN 0.5 AND 2)`
     );
   }
+  if (!dancerColumns.some((column) => column.name === "shape")) {
+    db.exec(
+      `ALTER TABLE dancers
+       ADD COLUMN shape TEXT NOT NULL DEFAULT 'circle'
+       CHECK (shape IN ('circle', 'square', 'diamond', 'triangle'))`
+    );
+  }
+  if (!dancerColumns.some((column) => column.name === "team_id")) {
+    db.exec(
+      `ALTER TABLE dancers
+       ADD COLUMN team_id INTEGER REFERENCES teams(id) ON DELETE SET NULL`
+    );
+  }
 }
 
 function seedDemo(db) {

@@ -51,12 +51,31 @@ test("project, dancer and formation CRUD workflow", async (t) => {
   assert.equal(createdProject.payload.project.stageShape, "rectangle");
   assert.equal(createdProject.payload.project.defaultDancerScale, 1.25);
 
+  const teamA = await request(`/api/projects/${projectId}/teams`, {
+    method: "POST",
+    body: JSON.stringify({ name: "Team A", color: "#0ea5e9" })
+  });
+  const teamB = await request(`/api/projects/${projectId}/teams`, {
+    method: "POST",
+    body: JSON.stringify({ name: "Team B", color: "#ec4899" })
+  });
+  assert.equal(teamA.response.status, 201);
+  assert.equal(teamB.response.status, 201);
+
   const firstDancer = await request(`/api/projects/${projectId}/dancers`, {
     method: "POST",
-    body: JSON.stringify({ code: "A1", name: "Alice", color: "#f97316" })
+    body: JSON.stringify({
+      code: "A1",
+      name: "Alice",
+      color: "#f97316",
+      shape: "square",
+      teamId: teamA.payload.team.id
+    })
   });
   assert.equal(firstDancer.response.status, 201);
   assert.equal(firstDancer.payload.dancer.sizeScale, 1.25);
+  assert.equal(firstDancer.payload.dancer.shape, "square");
+  assert.equal(firstDancer.payload.dancer.teamId, teamA.payload.team.id);
 
   const secondDancer = await request(`/api/projects/${projectId}/dancers`, {
     method: "POST",
@@ -65,6 +84,37 @@ test("project, dancer and formation CRUD workflow", async (t) => {
   assert.equal(secondDancer.response.status, 201);
   assert.equal(secondDancer.payload.dancer.color, "#f97316");
   assert.equal(secondDancer.payload.dancer.sizeScale, 1.25);
+  assert.equal(secondDancer.payload.dancer.shape, "circle");
+  assert.equal(secondDancer.payload.dancer.teamId, null);
+
+  const teamMembers = await request(
+    `/api/projects/${projectId}/teams/${teamA.payload.team.id}/members`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        dancerIds: [firstDancer.payload.dancer.id, secondDancer.payload.dancer.id]
+      })
+    }
+  );
+  assert.equal(teamMembers.response.status, 200);
+  assert.equal(
+    teamMembers.payload.teams.find(
+      (team) => team.id === teamA.payload.team.id
+    ).memberCount,
+    2
+  );
+
+  const reorderedTeams = await request(`/api/projects/${projectId}/teams/reorder`, {
+    method: "PUT",
+    body: JSON.stringify({
+      teamIds: [teamB.payload.team.id, teamA.payload.team.id]
+    })
+  });
+  assert.equal(reorderedTeams.response.status, 200);
+  assert.deepEqual(
+    reorderedTeams.payload.teams.map((team) => team.name),
+    ["Team B", "Team A"]
+  );
 
   const resizedDancer = await request(
     `/api/projects/${projectId}/dancers/${firstDancer.payload.dancer.id}`,
@@ -85,6 +135,7 @@ test("project, dancer and formation CRUD workflow", async (t) => {
   const projectAfterDancers = await request(`/api/projects/${projectId}`);
   const firstFormation = projectAfterDancers.payload.project.formations[0];
   assert.equal(projectAfterDancers.payload.project.dancers.length, 2);
+  assert.equal(projectAfterDancers.payload.project.teams.length, 2);
   assert.equal(Object.keys(firstFormation.positions).length, 2);
 
   const newFormation = await request(`/api/projects/${projectId}/formations`, {
@@ -226,6 +277,14 @@ test("project, dancer and formation CRUD workflow", async (t) => {
   assert.deepEqual(
     duplicate.dancers.map((dancer) => dancer.code),
     ["A1", "B1"]
+  );
+  assert.equal(duplicate.teams.length, 2);
+  assert.ok(
+    duplicate.dancers.every(
+      (dancer) =>
+        dancer.teamId &&
+        duplicate.teams.some((team) => team.id === dancer.teamId)
+    )
   );
   assert.ok(
     duplicate.dancers.every(

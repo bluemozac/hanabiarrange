@@ -75,6 +75,44 @@ export const api = {
     });
   },
 
+  listTeams(projectId) {
+    return request(`/api/projects/${projectId}/teams`);
+  },
+
+  createTeam(projectId, values) {
+    return request(`/api/projects/${projectId}/teams`, {
+      method: "POST",
+      body: jsonBody(values)
+    });
+  },
+
+  updateTeam(projectId, teamId, values) {
+    return request(`/api/projects/${projectId}/teams/${teamId}`, {
+      method: "PATCH",
+      body: jsonBody(values)
+    });
+  },
+
+  deleteTeam(projectId, teamId) {
+    return request(`/api/projects/${projectId}/teams/${teamId}`, {
+      method: "DELETE"
+    });
+  },
+
+  reorderTeams(projectId, teamIds) {
+    return request(`/api/projects/${projectId}/teams/reorder`, {
+      method: "PUT",
+      body: jsonBody({ teamIds })
+    });
+  },
+
+  setTeamMembers(projectId, teamId, dancerIds) {
+    return request(`/api/projects/${projectId}/teams/${teamId}/members`, {
+      method: "PUT",
+      body: jsonBody({ dancerIds })
+    });
+  },
+
   createFormation(projectId, values) {
     return request(`/api/projects/${projectId}/formations`, {
       method: "POST",

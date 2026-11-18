@@ -5,7 +5,8 @@ const {
   requiredText,
   optionalText,
   colorHex,
-  finiteNumber
+  finiteNumber,
+  validDancerShape
 } = require("../http");
 const {
   getProjectRow,
@@ -38,6 +39,8 @@ function createDancersRouter(db) {
     const code = requiredText(request.body?.code, "舞者代號", 20);
     const name = optionalText(request.body?.name, "舞者名稱", 80) ?? "";
     const color = colorHex(request.body?.color ?? "#f97316");
+    const shape = validDancerShape(request.body?.shape, "circle");
+    const teamId = resolveTeamId(db, project.id, request.body?.teamId, null);
     const sizeScale = finiteNumber(
       request.body?.sizeScale ?? project.default_dancer_scale ?? 1,
       "舞者大小",
@@ -53,10 +56,11 @@ function createDancersRouter(db) {
         .get(project.id).next_order;
       const result = db
         .prepare(
-          `INSERT INTO dancers (project_id, code, name, color, size_scale, sort_order)
-           VALUES (?, ?, ?, ?, ?, ?)`
+          `INSERT INTO dancers
+             (project_id, team_id, code, name, color, shape, size_scale, sort_order)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
         )
-        .run(project.id, code, name, color, sizeScale, nextOrder);
+        .run(project.id, teamId, code, name, color, shape, sizeScale, nextOrder);
       const dancerId = Number(result.lastInsertRowid);
 
       const dancers = db
@@ -108,6 +112,16 @@ function createDancersRouter(db) {
     const name =
       request.body?.name === undefined ? current.name : optionalText(request.body.name, "舞者名稱", 80);
     const color = request.body?.color === undefined ? current.color : colorHex(request.body.color);
+    const shape =
+      request.body?.shape === undefined
+        ? current.shape
+        : validDancerShape(request.body.shape);
+    const teamId = resolveTeamId(
+      db,
+      project.id,
+      request.body?.teamId,
+      current.team_id
+    );
     const sizeScale =
       request.body?.sizeScale === undefined
         ? current.size_scale
@@ -115,9 +129,10 @@ function createDancersRouter(db) {
 
     db.prepare(
       `UPDATE dancers
-       SET code = ?, name = ?, color = ?, size_scale = ?, updated_at = CURRENT_TIMESTAMP
+       SET team_id = ?, code = ?, name = ?, color = ?, shape = ?, size_scale = ?,
+           updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`
-    ).run(code, name, color, sizeScale, dancerId);
+    ).run(teamId, code, name, color, shape, sizeScale, dancerId);
     touchProject(db, project.id);
     request.app.locals.realtime?.broadcastProjectChanged(project.id, "dancers-changed");
 
@@ -157,6 +172,17 @@ function createDancersRouter(db) {
   });
 
   return router;
+}
+
+function resolveTeamId(db, projectId, value, fallback) {
+  if (value === undefined) return fallback;
+  if (value === null || value === "") return null;
+  const teamId = parseId(value, "隊伍 ID");
+  const team = db
+    .prepare("SELECT id FROM teams WHERE id = ? AND project_id = ?")
+    .get(teamId, projectId);
+  if (!team) throw new ApiError(400, "隊伍不屬於此專案");
+  return teamId;
 }
 
 module.exports = createDancersRouter;

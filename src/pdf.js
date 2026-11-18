@@ -413,9 +413,10 @@ function drawStageDiagram(document, project, formation, frame) {
     const radius = baseRadius * (dancer.sizeScale ?? 1);
     const x = frame.x + (position.x / project.stageWidth) * frame.width;
     const y = frame.y + (position.y / project.stageHeight) * frame.height;
-    document.circle(x, y, radius).fill(safeColor(dancer.color));
-    document
-      .circle(x, y, radius)
+    tracePdfDancerShape(document, x, y, radius, dancer.shape).fill(
+      safeColor(dancer.color)
+    );
+    tracePdfDancerShape(document, x, y, radius, dancer.shape)
       .lineWidth(1.5)
       .strokeColor("#ffffff")
       .stroke();
@@ -434,6 +435,29 @@ function drawStageDiagram(document, project, formation, frame) {
         lineBreak: false
       });
   }
+}
+
+function tracePdfDancerShape(document, x, y, radius, shape = "circle") {
+  if (shape === "square") {
+    const side = radius * 1.72;
+    return document.rect(x - side / 2, y - side / 2, side, side);
+  }
+  if (shape === "diamond") {
+    document.moveTo(x, y - radius);
+    document.lineTo(x + radius, y);
+    document.lineTo(x, y + radius);
+    document.lineTo(x - radius, y);
+    document.closePath();
+    return document;
+  }
+  if (shape === "triangle") {
+    document.moveTo(x, y - radius);
+    document.lineTo(x + radius * 0.9, y + radius * 0.72);
+    document.lineTo(x - radius * 0.9, y + radius * 0.72);
+    document.closePath();
+    return document;
+  }
+  return document.circle(x, y, radius);
 }
 
 function tracePdfStagePath(
