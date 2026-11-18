@@ -14,14 +14,17 @@ export class StageCanvas {
     this.remoteDancers = new Map();
     this.remoteAnnotations = new Map();
     this.selectedDancerId = null;
+    this.selectedDancerIds = new Set();
     this.selectedAnnotationId = null;
     this.draggingDancerId = null;
     this.dancerDragGroup = null;
     this.teamDragEnabled = false;
+    this.multiSelectEnabled = false;
     this.draggingAnnotationId = null;
     this.annotationDragState = null;
     this.touchPoints = new Map();
     this.mobileGesture = null;
+    this.desktopPanning = null;
     this.textPlacementMode = false;
     this.activePointerType = "mouse";
     this.hoveredDancerId = null;
@@ -48,7 +51,8 @@ export class StageCanvas {
       if (
         !this.draggingDancerId &&
         !this.draggingAnnotationId &&
-        !this.mobileGesture
+        !this.mobileGesture &&
+        !this.desktopPanning
       ) {
         this.hoveredDancerId = null;
         this.hoveredAnnotationId = null;
@@ -82,7 +86,14 @@ export class StageCanvas {
   }
 
   setSelectedDancer(dancerId) {
-    this.selectedDancerId = dancerId;
+    this.setSelectedDancers(dancerId ? [dancerId] : [], dancerId);
+  }
+
+  setSelectedDancers(dancerIds, primaryDancerId = null) {
+    this.selectedDancerIds = new Set(dancerIds.map(Number));
+    this.selectedDancerId =
+      primaryDancerId ?? [...this.selectedDancerIds].at(-1) ?? null;
+    this.canvas.dataset.selectedDancers = String(this.selectedDancerIds.size);
     this.draw();
   }
 
@@ -98,6 +109,11 @@ export class StageCanvas {
 
   setTeamDragEnabled(enabled) {
     this.teamDragEnabled = Boolean(enabled);
+  }
+
+  setMultiSelectEnabled(enabled) {
+    this.multiSelectEnabled = Boolean(enabled);
+    this.draw();
   }
 
   updateAnnotationPosition(annotationId, position) {
@@ -276,18 +292,41 @@ export class StageCanvas {
       }
 
       this.selectedAnnotationId = null;
+      if (event.pointerType === "mouse" && event.button === 0) {
+        event.preventDefault();
+        this.desktopPanning = {
+          pointerId: event.pointerId,
+          lastX: event.clientX,
+          lastY: event.clientY
+        };
+        this.canvas.setPointerCapture(event.pointerId);
+        this.canvas.style.cursor = "grabbing";
+        this.callbacks.onPanStart?.();
+      }
       return;
     }
 
     event.preventDefault();
     this.selectedAnnotationId = null;
+    const additive =
+      event.shiftKey || event.ctrlKey || event.metaKey;
+    const wasSelected = this.selectedDancerIds.has(hit.id);
+    const stillSelected = this.callbacks.onSelect?.(hit.id, { additive });
+    if (stillSelected === false) return;
     this.draggingDancerId = hit.id;
+    const selectedGroup = this.dancers.filter((dancer) =>
+      this.selectedDancerIds.has(dancer.id)
+    );
     const groupDancers =
-      this.teamDragEnabled && hit.teamId
-        ? this.dancers.filter((dancer) => dancer.teamId === hit.teamId)
-        : [hit];
+      selectedGroup.length > 1
+        ? selectedGroup
+        : this.teamDragEnabled && hit.teamId
+          ? this.dancers.filter((dancer) => dancer.teamId === hit.teamId)
+          : [hit];
     this.dancerDragGroup = {
       startPoint: { x: point.x, y: point.y },
+      moved: false,
+      toggleOnClick: this.multiSelectEnabled && wasSelected && !additive,
       positions: Object.fromEntries(
         groupDancers.map((dancer) => [
           dancer.id,
@@ -295,10 +334,8 @@ export class StageCanvas {
         ])
       )
     };
-    this.selectedDancerId = hit.id;
     this.canvas.setPointerCapture(event.pointerId);
     this.canvas.style.cursor = "grabbing";
-    this.callbacks.onSelect?.(hit.id);
   }
 
   beginMobileStageGesture() {
@@ -306,11 +343,13 @@ export class StageCanvas {
       const dancerIds = this.dancerDragGroup
         ? Object.keys(this.dancerDragGroup.positions).map(Number)
         : [this.draggingDancerId];
-      for (const dancerId of dancerIds) {
-        this.callbacks.onPositionCommit?.(
-          dancerId,
-          this.displayPositions[dancerId]
-        );
+      if (this.dancerDragGroup?.moved) {
+        for (const dancerId of dancerIds) {
+          this.callbacks.onPositionCommit?.(
+            dancerId,
+            this.displayPositions[dancerId]
+          );
+        }
       }
     }
     if (this.draggingAnnotationId) {
@@ -405,6 +444,19 @@ export class StageCanvas {
       return;
     }
 
+    if (
+      this.desktopPanning &&
+      this.desktopPanning.pointerId === event.pointerId
+    ) {
+      event.preventDefault();
+      const deltaX = event.clientX - this.desktopPanning.lastX;
+      const deltaY = event.clientY - this.desktopPanning.lastY;
+      this.desktopPanning.lastX = event.clientX;
+      this.desktopPanning.lastY = event.clientY;
+      this.callbacks.onPan?.(deltaX, deltaY);
+      return;
+    }
+
     const point = this.eventToStage(event);
 
     if (this.draggingAnnotationId && this.annotationDragState) {
@@ -440,6 +492,7 @@ export class StageCanvas {
     if (this.draggingDancerId) {
       event.preventDefault();
       if (this.dancerDragGroup) {
+        this.dancerDragGroup.moved = true;
         const requestedDelta = {
           x: point.x - this.dancerDragGroup.startPoint.x,
           y: point.y - this.dancerDragGroup.startPoint.y
@@ -482,12 +535,27 @@ export class StageCanvas {
         ? "grab"
         : hoveredAnnotationId
           ? "move"
-          : "default";
+          : event.pointerType === "mouse"
+            ? "grab"
+            : "default";
       this.draw();
     }
   }
 
   handlePointerUp(event) {
+    if (
+      this.desktopPanning &&
+      this.desktopPanning.pointerId === event.pointerId
+    ) {
+      this.desktopPanning = null;
+      if (this.canvas.hasPointerCapture(event.pointerId)) {
+        this.canvas.releasePointerCapture(event.pointerId);
+      }
+      this.canvas.style.cursor = this.textPlacementMode ? "text" : "grab";
+      this.callbacks.onPanEnd?.();
+      return;
+    }
+
     if (event.pointerType === "touch") {
       this.touchPoints.delete(event.pointerId);
       if (this.canvas.hasPointerCapture(event.pointerId)) {
@@ -531,17 +599,25 @@ export class StageCanvas {
     const dancerIds = this.dancerDragGroup
       ? Object.keys(this.dancerDragGroup.positions).map(Number)
       : [this.draggingDancerId];
+    const moved = Boolean(this.dancerDragGroup?.moved);
+    const toggleDancerId = this.dancerDragGroup?.toggleOnClick
+      ? Number(this.draggingDancerId)
+      : null;
     this.draggingDancerId = null;
     this.dancerDragGroup = null;
     this.canvas.style.cursor = this.hoveredDancerId ? "grab" : "default";
     if (this.canvas.hasPointerCapture(event.pointerId)) {
       this.canvas.releasePointerCapture(event.pointerId);
     }
-    for (const dancerId of dancerIds) {
-      this.callbacks.onPositionCommit?.(
-        dancerId,
-        this.displayPositions[dancerId]
-      );
+    if (moved) {
+      for (const dancerId of dancerIds) {
+        this.callbacks.onPositionCommit?.(
+          dancerId,
+          this.displayPositions[dancerId]
+        );
+      }
+    } else if (toggleDancerId) {
+      this.callbacks.onSelect?.(toggleDancerId, { toggle: true });
     }
   }
 
@@ -878,11 +954,20 @@ export class StageCanvas {
 
   drawDancers() {
     for (const dancer of this.dancers) {
-      if (dancer.id === this.selectedDancerId) continue;
+      if (this.selectedDancerIds.has(dancer.id)) continue;
       this.drawDancer(dancer, this.dancerRadius(dancer), false);
     }
-    const selected = this.dancers.find((dancer) => dancer.id === this.selectedDancerId);
-    if (selected) this.drawDancer(selected, this.dancerRadius(selected), true);
+    const selectedDancers = this.dancers.filter((dancer) =>
+      this.selectedDancerIds.has(dancer.id)
+    );
+    for (const dancer of selectedDancers) {
+      if (dancer.id === this.selectedDancerId) continue;
+      this.drawDancer(dancer, this.dancerRadius(dancer), true);
+    }
+    const primary = selectedDancers.find(
+      (dancer) => dancer.id === this.selectedDancerId
+    );
+    if (primary) this.drawDancer(primary, this.dancerRadius(primary), true);
     this.drawRemoteDancers();
   }
 
@@ -939,6 +1024,17 @@ export class StageCanvas {
     const isHovered = dancer.id === this.hoveredDancerId || dancer.id === this.draggingDancerId;
 
     context.save();
+    if (selected && this.multiSelectEnabled) {
+      context.fillStyle = "rgba(235, 94, 53, 0.16)";
+      context.beginPath();
+      context.arc(point.x, point.y, radius + 12, 0, TAU);
+      context.fill();
+      context.lineWidth = 2.5;
+      context.strokeStyle = "#eb5e35";
+      context.beginPath();
+      context.arc(point.x, point.y, radius + 8, 0, TAU);
+      context.stroke();
+    }
     if (selected || isHovered) {
       context.fillStyle = hexToRgba(dancer.color, selected ? 0.18 : 0.1);
       context.beginPath();
@@ -980,6 +1076,25 @@ export class StageCanvas {
       context.font = `750 ${fontSize}px "Aptos", "Segoe UI", sans-serif`;
     }
     context.fillText(truncateLabel(dancer.code, 8), point.x, point.y + 0.5);
+
+    if (selected && this.multiSelectEnabled) {
+      const badgeX = point.x + radius * 0.78;
+      const badgeY = point.y - radius * 0.78;
+      context.fillStyle = "#eb5e35";
+      context.beginPath();
+      context.arc(badgeX, badgeY, 6.5, 0, TAU);
+      context.fill();
+      context.lineWidth = 1.5;
+      context.strokeStyle = "#ffffff";
+      context.stroke();
+      context.beginPath();
+      context.moveTo(badgeX - 3, badgeY);
+      context.lineTo(badgeX - 0.8, badgeY + 2.2);
+      context.lineTo(badgeX + 3.2, badgeY - 2.5);
+      context.lineWidth = 1.7;
+      context.strokeStyle = "#ffffff";
+      context.stroke();
+    }
 
     if (isHovered && dancer.name) {
       this.drawTooltip(dancer.name, point.x, point.y - radius - 12);

@@ -79,6 +79,9 @@
         <circle cx="9" cy="7" r="4" />
         <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
       </symbol>
+      <symbol id="icon-multi-select" viewBox="0 0 24 24">
+        <path d="m3 17 2 2 4-4M3 7l2 2 4-4M13 6h8M13 12h8M13 18h8" />
+      </symbol>
     </svg>
 
     <div class="app-shell">
@@ -94,8 +97,9 @@
         <section class="side-section">
           <div class="section-heading">
             <span>排陣項目-----＞</span>
-            <button class="icon-button icon-button--light" id="newProjectButton" type="button" title="新增專案" aria-label="新增專案">
+            <button class="compact-action-button" id="newProjectButton" type="button" title="新增專案" aria-label="新增專案">
               <svg><use href="#icon-plus"></use></svg>
+              <span>新增</span>
             </button>
           </div>
           <div class="select-wrap">
@@ -109,11 +113,13 @@
           <div class="section-heading">
             <span>舞者 <span class="count-badge" id="dancerCount">0</span></span>
             <div class="section-heading-actions">
-              <button class="icon-button icon-button--light" id="manageTeamsButton" type="button" title="隊伍管理" aria-label="隊伍管理">
+              <button class="compact-action-button" id="manageTeamsButton" type="button" title="隊伍管理" aria-label="隊伍管理">
                 <svg><use href="#icon-users"></use></svg>
+                <span>隊伍</span>
               </button>
-              <button class="icon-button icon-button--light" id="newDancerButton" type="button" title="新增舞者" aria-label="新增舞者">
+              <button class="compact-action-button" id="newDancerButton" type="button" title="新增舞者" aria-label="新增舞者">
                 <svg><use href="#icon-plus"></use></svg>
+                <span>舞者</span>
               </button>
             </div>
           </div>
@@ -151,8 +157,9 @@
               <svg><use href="#icon-settings"></use></svg>
               <span>舞台設定</span>
             </button>
-            <button class="icon-button icon-button--danger" id="deleteProjectButton" type="button" title="刪除專案" aria-label="刪除專案">
+            <button class="text-button danger-action-button" id="deleteProjectButton" type="button" title="刪除專案" aria-label="刪除專案">
               <svg><use href="#icon-trash"></use></svg>
+              <span>刪除專案</span>
             </button>
           </div>
         </header>
@@ -167,18 +174,27 @@
               <div class="stage-toolbar-controls">
                 <button class="icon-button view-toggle" id="addTextButton" type="button" title="加入文字注解" aria-label="加入文字注解" aria-pressed="false">
                   <svg><use href="#icon-text"></use></svg>
+                  <span>文字</span>
                 </button>
                 <button class="icon-button view-toggle" id="teamDragToggle" type="button" title="隊伍同步拖曳" aria-label="隊伍同步拖曳" aria-pressed="false">
                   <svg><use href="#icon-users"></use></svg>
+                  <span>隊伍</span>
+                </button>
+                <button class="icon-button view-toggle" id="multiSelectToggle" type="button" title="多選舞者" aria-label="多選舞者" aria-pressed="false">
+                  <svg><use href="#icon-multi-select"></use></svg>
+                  <span>多選</span>
                 </button>
                 <button class="icon-button view-toggle" id="stageFlipButton" type="button" title="上下反轉舞台" aria-label="上下反轉舞台" aria-pressed="false">
                   <svg><use href="#icon-flip-vertical"></use></svg>
+                  <span>反轉</span>
                 </button>
                 <button class="icon-button view-toggle" id="stageGridButton" type="button" title="顯示網格" aria-label="顯示網格" aria-pressed="true">
                   <svg><use href="#icon-grid"></use></svg>
+                  <span>網格</span>
                 </button>
                 <button class="icon-button view-toggle" id="stageThemeButton" type="button" title="使用深色舞台" aria-label="使用深色舞台" aria-pressed="false">
                   <svg><use id="stageThemeIcon" href="#icon-moon"></use></svg>
+                  <span id="stageThemeLabel">深色</span>
                 </button>
                 <div class="stage-dimensions" id="stageDimensions">-- × --</div>
               </div>
@@ -200,15 +216,17 @@
             </div>
             <div class="transport-bar">
               <div class="transport-controls">
-                <button class="icon-button" id="previousFormationButton" type="button" title="上一個隊形" aria-label="上一個隊形">
+                <button class="transport-nav-button" id="previousFormationButton" type="button" title="上一個隊形" aria-label="上一個隊形">
                   <svg><use href="#icon-skip-back"></use></svg>
+                  <span>上一個</span>
                 </button>
                 <button class="play-button" id="playButton" type="button">
                   <svg><use href="#icon-play"></use></svg>
                   <span>播放走位</span>
                 </button>
-                <button class="icon-button" id="nextFormationButton" type="button" title="下一個隊形" aria-label="下一個隊形">
+                <button class="transport-nav-button" id="nextFormationButton" type="button" title="下一個隊形" aria-label="下一個隊形">
                   <svg><use href="#icon-skip-forward"></use></svg>
+                  <span>下一個</span>
                 </button>
               </div>
               <div class="transition-readout">
@@ -241,8 +259,9 @@
                   </div>
                   <div class="inspector-heading-actions">
                     <span class="sequence-chip" id="formationSequence">--</span>
-                    <button class="icon-button icon-button--danger" id="deleteFormationButton" type="button" title="刪除隊形" aria-label="刪除隊形">
+                    <button class="inspector-delete-button" id="deleteFormationButton" type="button" title="刪除隊形" aria-label="刪除隊形">
                       <svg><use href="#icon-trash"></use></svg>
+                      <span>刪除隊形</span>
                     </button>
                   </div>
                 </div>
@@ -268,8 +287,9 @@
                     <p class="panel-label">DANCER</p>
                     <h3 id="selectedDancerTitle">未選取舞者</h3>
                   </div>
-                  <button class="icon-button icon-button--danger" id="deleteDancerButton" type="button" title="刪除舞者" aria-label="刪除舞者" disabled>
+                  <button class="inspector-delete-button" id="deleteDancerButton" type="button" title="刪除舞者" aria-label="刪除舞者" disabled>
                     <svg><use href="#icon-trash"></use></svg>
+                    <span>刪除舞者</span>
                   </button>
                 </div>
                 <form id="dancerForm" class="stack-form">

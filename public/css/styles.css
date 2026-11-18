@@ -186,6 +186,31 @@ svg {
   gap: 5px;
 }
 
+.compact-action-button {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  color: #c3c8c5;
+  background: #252b30;
+  border: 1px solid #3b4247;
+  border-radius: 5px;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.compact-action-button:hover:not(:disabled) {
+  color: #fff;
+  background: #30363b;
+  border-color: #596166;
+}
+
+.compact-action-button svg {
+  width: 13px;
+  height: 13px;
+}
+
 .icon-button {
   display: inline-grid;
   width: 34px;
@@ -497,6 +522,16 @@ svg {
   border-color: #c8c4ba;
 }
 
+.danger-action-button {
+  color: var(--danger);
+}
+
+.danger-action-button:hover:not(:disabled) {
+  color: #fff;
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
 .text-button svg,
 .secondary-button svg {
   width: 15px;
@@ -586,13 +621,20 @@ svg {
 }
 
 .stage-toolbar-title {
+  flex: 1 1 150px;
   min-width: 0;
+  max-width: calc(100% - 142px);
+  overflow: hidden;
   padding: 7px 9px;
   background: rgba(251, 250, 246, 0.88);
   border: 1px solid rgba(190, 186, 176, 0.72);
   border-radius: 5px;
   box-shadow: 0 5px 18px rgba(28, 30, 27, 0.08);
   backdrop-filter: blur(9px);
+}
+
+.stage-toolbar-title .panel-label {
+  white-space: nowrap;
 }
 
 .stage-toolbar h2,
@@ -623,7 +665,9 @@ svg {
 
 .stage-toolbar-controls {
   display: flex;
-  flex: 0 0 auto;
+  min-width: 0;
+  max-width: calc(100% - 142px);
+  flex: 0 1 auto;
   align-items: center;
   gap: 7px;
   padding: 4px;
@@ -633,11 +677,28 @@ svg {
   box-shadow: 0 5px 18px rgba(28, 30, 27, 0.08);
   backdrop-filter: blur(9px);
   pointer-events: auto;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.stage-toolbar-controls::-webkit-scrollbar {
+  display: none;
+}
+
+.stage-toolbar-controls .view-toggle,
+.stage-toolbar-controls .stage-dimensions {
+  flex: 0 0 auto;
 }
 
 .view-toggle {
-  width: 31px;
+  display: inline-flex;
+  width: auto;
+  min-width: 31px;
   height: 31px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
   color: #777b76;
   background: rgba(255, 255, 255, 0.55);
 }
@@ -645,6 +706,12 @@ svg {
 .view-toggle svg {
   width: 15px;
   height: 15px;
+}
+
+.view-toggle span {
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .view-toggle.is-active {
@@ -893,6 +960,29 @@ svg {
   pointer-events: auto;
 }
 
+.transport-nav-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  color: #525653;
+  background: #fff;
+  border: 1px solid #d8d4ca;
+  border-radius: 5px;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.transport-nav-button:hover:not(:disabled) {
+  border-color: #aaa69c;
+}
+
+.transport-nav-button svg {
+  width: 14px;
+  height: 14px;
+}
+
 .play-button {
   min-width: 132px;
   color: #fff;
@@ -942,6 +1032,12 @@ svg {
 }
 
 .stage-panel.is-dark .transport-controls .icon-button:not(.play-button) {
+  color: #c4cdcb;
+  background: #263136;
+  border-color: #45545a;
+}
+
+.stage-panel.is-dark .transport-nav-button {
   color: #c4cdcb;
   background: #263136;
   border-color: #45545a;
@@ -1038,6 +1134,32 @@ svg {
 .inspector-heading-actions .icon-button svg {
   width: 14px;
   height: 14px;
+}
+
+.inspector-delete-button {
+  display: inline-flex;
+  min-height: 27px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  color: var(--danger);
+  background: transparent;
+  border: 1px solid #e0c4c4;
+  border-radius: 4px;
+  font-size: 8px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.inspector-delete-button:hover:not(:disabled) {
+  color: #fff;
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.inspector-delete-button svg {
+  width: 12px;
+  height: 12px;
 }
 
 .stack-form {
@@ -1907,7 +2029,7 @@ body.is-resizing-panels .panel-resizer:active::after {
   }
 }
 
-@media (max-width: 940px) {
+@media (max-width: 940px), (any-pointer: coarse) and (max-width: 1366px) {
   body {
     overflow: auto;
   }
@@ -2054,6 +2176,7 @@ body.is-resizing-panels .panel-resizer:active::after {
 
   .export-button,
   .duplicate-project-button,
+  .danger-action-button,
   #editProjectButton {
     display: inline-grid;
     width: 34px;
@@ -2063,6 +2186,7 @@ body.is-resizing-panels .panel-resizer:active::after {
 
   .export-button span,
   .duplicate-project-button span,
+  .danger-action-button span,
   #editProjectButton span {
     display: none;
   }
@@ -2175,6 +2299,10 @@ body.is-resizing-panels .panel-resizer:active::after {
     display: none;
   }
 
+  .transport-nav-button span {
+    display: none;
+  }
+
   .team-manager-grid {
     grid-template-columns: 1fr;
   }
@@ -2194,6 +2322,179 @@ body.is-resizing-panels .panel-resizer:active::after {
 
   .play-button {
     min-width: 118px;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 1366px) and (any-pointer: coarse) {
+  .app-shell {
+    display: flex;
+    min-height: 100vh;
+    min-height: 100dvh;
+    height: auto;
+    flex-direction: column;
+  }
+
+  .sidebar {
+    flex: 0 0 auto;
+  }
+
+  .workspace {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+    grid-template-rows: 76px minmax(0, 1fr) auto;
+    align-content: stretch;
+    overflow: visible;
+  }
+
+  .workspace-body {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .stage-panel {
+    min-height: 300px;
+    flex: 1 1 auto;
+    padding: 16px 14px 13px;
+    border-right: 0;
+  }
+
+  .canvas-frame {
+    min-height: 240px;
+  }
+
+  .inspector {
+    min-height: 0;
+    padding: 0;
+    border-top: 1px solid var(--line);
+    overflow: hidden;
+  }
+
+  .inspector:not(.is-collapsed) {
+    height: auto;
+    overflow: visible;
+  }
+
+  .inspector-body {
+    padding: 16px;
+  }
+
+  .inspector.is-collapsed,
+  .timeline.is-collapsed {
+    height: 56px;
+  }
+
+  .inspector.is-collapsed .inspector-body,
+  .timeline.is-collapsed .timeline-body {
+    display: none;
+  }
+
+  .timeline {
+    height: auto;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .timeline:not(.is-collapsed) {
+    overflow: visible;
+  }
+
+  .timeline-body {
+    display: block;
+    flex: none;
+    padding: 14px;
+  }
+
+  .formation-track {
+    min-height: auto;
+    flex: none;
+    padding-bottom: 3px;
+  }
+
+  .timeline-header {
+    justify-content: flex-end;
+    margin-bottom: 12px;
+  }
+
+  .timeline-header > div {
+    display: none;
+  }
+
+  .mobile-panel-toggle {
+    display: flex;
+    width: 100%;
+    height: 56px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 0 16px;
+    color: var(--ink);
+    background: rgba(251, 250, 246, 0.96);
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+  }
+
+  .timeline .mobile-panel-toggle {
+    border-top: 1px solid var(--line);
+    border-bottom: 0;
+  }
+}
+
+@media (max-width: 720px),
+  (min-width: 721px) and (max-width: 1366px) and (any-pointer: coarse) {
+  .inspector:not(.is-collapsed),
+  .timeline:not(.is-collapsed) {
+    position: fixed;
+    z-index: 90;
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: 12px;
+    width: auto;
+    max-width: 900px;
+    max-height: min(60dvh, 680px);
+    margin-inline: auto;
+    overflow: hidden;
+    background: var(--panel);
+    border: 1px solid #cfcbc1;
+    border-radius: 8px;
+    box-shadow: 0 24px 70px rgba(17, 20, 22, 0.34);
+  }
+
+  .inspector:not(.is-collapsed) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .timeline:not(.is-collapsed) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .inspector:not(.is-collapsed) .mobile-panel-toggle,
+  .timeline:not(.is-collapsed) .mobile-panel-toggle {
+    flex: 0 0 auto;
+    position: sticky;
+    z-index: 2;
+    top: 0;
+    background: var(--panel);
+  }
+
+  .inspector:not(.is-collapsed) .inspector-body {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .timeline:not(.is-collapsed) .timeline-body {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 }
 

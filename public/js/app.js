@@ -10,7 +10,10 @@ const STAGE_SIZE_KEY = "hanabi-stage-size";
 const PANEL_LAYOUT_KEY = "hanabi-panel-layout";
 const COLLAB_USER_KEY = "hanabi-collaboration-user";
 const TEAM_DRAG_KEY = "hanabi-team-drag";
-const mobileLayout = window.matchMedia("(max-width: 720px)");
+const MULTI_SELECT_KEY = "hanabi-multi-select";
+const mobileLayout = window.matchMedia(
+  "(max-width: 720px), (any-pointer: coarse) and (max-width: 1366px), (max-width: 940px) and (orientation: landscape)"
+);
 
 const elements = {
   projectSelect: $("#projectSelect"),
@@ -29,10 +32,12 @@ const elements = {
   canvasFrame: $("#canvasFrame"),
   addTextButton: $("#addTextButton"),
   teamDragToggle: $("#teamDragToggle"),
+  multiSelectToggle: $("#multiSelectToggle"),
   stageFlipButton: $("#stageFlipButton"),
   stageGridButton: $("#stageGridButton"),
   stageThemeButton: $("#stageThemeButton"),
   stageThemeIcon: $("#stageThemeIcon"),
+  stageThemeLabel: $("#stageThemeLabel"),
   stageResizeHandle: $("#stageResizeHandle"),
   sidebarResizer: $("#sidebarResizer"),
   inspectorResizer: $("#inspectorResizer"),
@@ -128,12 +133,14 @@ const state = {
   project: null,
   selectedFormationId: null,
   selectedDancerId: null,
+  selectedDancerIds: [],
   selectedAnnotationId: null,
   selectedTeamId: null,
   isPlaying: false,
   stageTheme: readPreference(STAGE_THEME_KEY, "light"),
   gridVisible: readPreference(STAGE_GRID_KEY, "true") !== "false",
-  teamDragEnabled: readPreference(TEAM_DRAG_KEY, "false") === "true"
+  teamDragEnabled: readPreference(TEAM_DRAG_KEY, "false") === "true",
+  multiSelectEnabled: readPreference(MULTI_SELECT_KEY, "false") === "true"
 };
 
 const collaborationUser = createCollaborationUser();
@@ -159,7 +166,7 @@ let pendingMobileGesture = null;
 let panelResizeState = null;
 
 const stage = new StageCanvas(elements.stageCanvas, {
-  onSelect: (dancerId) => selectDancer(dancerId),
+  onSelect: (dancerId, options) => selectDancer(dancerId, options),
   onPositionChange: (dancerId, position) => handlePositionChange(dancerId, position),
   onPositionCommit: (dancerId, position) => saveDancerPosition(dancerId, position),
   onAnnotationPlace: (position) => openNewAnnotationDialog(position),
@@ -168,6 +175,9 @@ const stage = new StageCanvas(elements.stageCanvas, {
     handleAnnotationPositionChange(annotationId, position),
   onAnnotationPositionCommit: (annotationId, position) =>
     handleAnnotationPositionCommit(annotationId, position),
+  onPan: (deltaX, deltaY) => panStage(deltaX, deltaY),
+  onPanStart: () => elements.canvasStageArea.classList.add("is-panning"),
+  onPanEnd: () => elements.canvasStageArea.classList.remove("is-panning"),
   onMobileStageGesture: (gesture) => handleMobileStageGesture(gesture),
   onMobileStageGestureStart: () =>
     elements.canvasStageArea.classList.add("is-panning"),
@@ -189,6 +199,7 @@ async function init() {
   restorePanelLayout();
   applyStageAppearance();
   applyTeamDragState();
+  applyMultiSelectState();
   restoreStageSize();
   try {
     const payload = await api.listProjects();
@@ -231,6 +242,7 @@ function bindEvents() {
   elements.exportForm.addEventListener("submit", submitExportForm);
   elements.addTextButton.addEventListener("click", toggleAnnotationPlacement);
   elements.teamDragToggle.addEventListener("click", toggleTeamDrag);
+  elements.multiSelectToggle.addEventListener("click", toggleMultiSelect);
   elements.annotationForm.addEventListener("submit", submitAnnotationForm);
   elements.deleteAnnotationButton.addEventListener("click", deleteSelectedAnnotation);
   elements.stageThemeButton.addEventListener("click", toggleStageTheme);
@@ -255,7 +267,17 @@ function bindEvents() {
 
   elements.dancerList.addEventListener("click", (event) => {
     const item = event.target.closest("[data-dancer-id]");
-    if (item) selectDancer(Number(item.dataset.dancerId));
+    if (item) {
+      const dancerId = Number(item.dataset.dancerId);
+      const additive = event.shiftKey || event.ctrlKey || event.metaKey;
+      selectDancer(dancerId, {
+        additive,
+        toggle:
+          !additive &&
+          state.multiSelectEnabled &&
+          state.selectedDancerIds.includes(dancerId)
+      });
+    }
   });
 
   elements.formationTrack.addEventListener("click", (event) => {
@@ -572,6 +594,9 @@ async function loadProject(projectId, preferredFormationId = null, preferredDanc
       null;
     state.selectedDancerId =
       state.project.dancers.find((dancer) => dancer.id === preferredDancerId)?.id ?? null;
+    state.selectedDancerIds = state.selectedDancerId
+      ? [state.selectedDancerId]
+      : [];
     state.selectedAnnotationId = null;
     state.isPlaying = false;
     setAnnotationPlacement(false);
@@ -640,6 +665,7 @@ function renderProjectMeta() {
   elements.duplicateProjectButton.disabled = !project;
   elements.stageFlipButton.disabled = !project;
   elements.teamDragToggle.disabled = !project;
+  elements.multiSelectToggle.disabled = !project;
   elements.manageTeamsButton.disabled = !project;
   $("#newDancerButton").disabled = !project;
   elements.exportPdfButton.disabled = !project;
@@ -677,7 +703,7 @@ function renderDancerList() {
       const position = formation?.positions[String(dancer.id)];
       const team = teamsById.get(dancer.teamId);
       return `
-        <button class="dancer-item ${dancer.id === state.selectedDancerId ? "is-selected" : ""}"
+        <button class="dancer-item ${state.selectedDancerIds.includes(dancer.id) ? "is-selected" : ""}"
           type="button" data-dancer-id="${dancer.id}">
           <span class="dancer-swatch dancer-swatch--${dancer.shape || "circle"}" style="background:${safeColor(dancer.color)}"></span>
           <span class="dancer-copy">
@@ -773,7 +799,12 @@ function renderDancerInspector() {
   }
 
   const position = formation?.positions[String(dancer.id)] ?? { x: 0, y: 0 };
-  elements.selectedDancerTitle.textContent = dancer.name || `舞者 ${dancer.code}`;
+  elements.selectedDancerTitle.textContent =
+    `${dancer.name || `舞者 ${dancer.code}`}${
+      state.selectedDancerIds.length > 1
+        ? `（已選 ${state.selectedDancerIds.length} 人）`
+        : ""
+    }`;
   elements.dancerCodeInput.value = dancer.code;
   elements.dancerNameInput.value = dancer.name;
   elements.dancerColorInput.value = safeColor(dancer.color);
@@ -829,19 +860,44 @@ function updateEmptyState() {
   elements.emptyStage.hidden = Boolean(formation);
 }
 
-function selectDancer(dancerId) {
-  if (state.isPlaying) return;
+function selectDancer(dancerId, options = {}) {
+  if (state.isPlaying) return false;
   state.selectedAnnotationId = null;
   stage.setSelectedAnnotation(null);
-  state.selectedDancerId =
-    state.project?.dancers.some((dancer) => dancer.id === dancerId) ? dancerId : null;
-  if (dancerId && mobileLayout.matches) {
-    setMobilePanelExpanded("inspector", true);
-    setMobilePanelExpanded("timeline", false);
+  if (!dancerId) {
+    state.selectedDancerId = null;
+    state.selectedDancerIds = [];
+    stage.setSelectedDancers([], null);
+    renderDancerList();
+    renderDancerInspector();
+    return false;
   }
-  stage.setSelectedDancer(state.selectedDancerId);
+
+  const valid = state.project?.dancers.some((dancer) => dancer.id === dancerId);
+  if (!valid) return false;
+  if (options.toggle) {
+    state.selectedDancerIds = state.selectedDancerIds.filter(
+      (id) => id !== dancerId
+    );
+  } else if (options.additive) {
+    state.selectedDancerIds = state.selectedDancerIds.includes(dancerId)
+      ? state.selectedDancerIds.filter((id) => id !== dancerId)
+      : [...state.selectedDancerIds, dancerId];
+  } else if (state.multiSelectEnabled) {
+    if (!state.selectedDancerIds.includes(dancerId)) {
+      state.selectedDancerIds = [...state.selectedDancerIds, dancerId];
+    }
+  } else if (!state.selectedDancerIds.includes(dancerId)) {
+    state.selectedDancerIds = [dancerId];
+  }
+  const stillSelected = state.selectedDancerIds.includes(dancerId);
+  state.selectedDancerId = stillSelected
+    ? dancerId
+    : state.selectedDancerIds.at(-1) ?? null;
+  stage.setSelectedDancers(state.selectedDancerIds, state.selectedDancerId);
   renderDancerList();
   renderDancerInspector();
+  return stillSelected;
 }
 
 function toggleAnnotationPlacement() {
@@ -1064,7 +1120,10 @@ function handleRemoteFormationUpdate(formation) {
     stage.clearRemotePositions();
     if (!stage.isInteracting()) {
       stage.setFormation(merged);
-      stage.setSelectedDancer(state.selectedDancerId);
+      stage.setSelectedDancers(
+        state.selectedDancerIds,
+        state.selectedDancerId
+      );
       stage.setSelectedAnnotation(state.selectedAnnotationId);
     }
     renderDancerList();
@@ -1094,6 +1153,7 @@ function selectFormation(formationId) {
   if (!formation) return;
   state.selectedFormationId = formation.id;
   state.selectedDancerId = null;
+  state.selectedDancerIds = [];
   state.selectedAnnotationId = null;
   setAnnotationPlacement(false);
   stage.setSelectedDancer(null);
@@ -2128,6 +2188,45 @@ function applyTeamDragState() {
   );
 }
 
+function toggleMultiSelect() {
+  state.multiSelectEnabled = !state.multiSelectEnabled;
+  writePreference(MULTI_SELECT_KEY, String(state.multiSelectEnabled));
+  if (!state.multiSelectEnabled && state.selectedDancerIds.length > 1) {
+    const primaryId =
+      state.selectedDancerIds.includes(state.selectedDancerId)
+        ? state.selectedDancerId
+        : state.selectedDancerIds.at(-1);
+    state.selectedDancerIds = primaryId ? [primaryId] : [];
+    state.selectedDancerId = primaryId ?? null;
+    stage.setSelectedDancers(state.selectedDancerIds, state.selectedDancerId);
+    renderDancerList();
+    renderDancerInspector();
+  }
+  applyMultiSelectState();
+  showToast(
+    state.multiSelectEnabled ? "舞者多選模式已開啟" : "舞者多選模式已關閉"
+  );
+}
+
+function applyMultiSelectState() {
+  stage.setMultiSelectEnabled(state.multiSelectEnabled);
+  elements.multiSelectToggle.classList.toggle(
+    "is-active",
+    state.multiSelectEnabled
+  );
+  elements.multiSelectToggle.setAttribute(
+    "aria-pressed",
+    String(state.multiSelectEnabled)
+  );
+  elements.multiSelectToggle.title = state.multiSelectEnabled
+    ? "關閉舞者多選"
+    : "開啟舞者多選";
+  elements.multiSelectToggle.setAttribute(
+    "aria-label",
+    state.multiSelectEnabled ? "關閉舞者多選" : "開啟舞者多選"
+  );
+}
+
 function toggleStageGrid() {
   state.gridVisible = !state.gridVisible;
   writePreference(STAGE_GRID_KEY, String(state.gridVisible));
@@ -2139,6 +2238,7 @@ function applyStageAppearance() {
   elements.canvasFrame.classList.toggle("is-dark", isDark);
   elements.stagePanel.classList.toggle("is-dark", isDark);
   elements.stageThemeIcon.setAttribute("href", isDark ? "#icon-sun" : "#icon-moon");
+  elements.stageThemeLabel.textContent = isDark ? "淺色" : "深色";
   elements.stageThemeButton.setAttribute("aria-pressed", String(isDark));
   elements.stageThemeButton.title = isDark ? "使用淺色舞台" : "使用深色舞台";
   elements.stageThemeButton.setAttribute(
@@ -2189,6 +2289,11 @@ function moveStageResize(event) {
   );
   stageResizeState.moved = true;
   setStageFrameSize(width, height);
+}
+
+function panStage(deltaX, deltaY) {
+  elements.canvasStageArea.scrollLeft -= deltaX;
+  elements.canvasStageArea.scrollTop -= deltaY;
 }
 
 function handleMobileStageGesture({ scale, deltaX, deltaY }) {
