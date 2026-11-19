@@ -87,6 +87,10 @@
     <div class="app-shell">
       <aside class="sidebar">
         <div class="brand-block">
+          <button class="sidebar-collapse-button" id="sidebarCollapseButton" type="button" title="收起左側面板" aria-label="收起左側面板">
+            <svg><use href="#icon-chevron-down"></use></svg>
+            <span id="sidebarCollapseLabel">收起</span>
+          </button>
           <div class="brand-mark">H</div>
           <div>
             <div class="brand-name">HANABI CHEER</div>
@@ -100,6 +104,10 @@
             <button class="compact-action-button" id="newProjectButton" type="button" title="新增專案" aria-label="新增專案">
               <svg><use href="#icon-plus"></use></svg>
               <span>新增</span>
+            </button>
+            <button class="mobile-sidebar-toggle" id="mobileSidebarToggle" type="button" title="收起選單" aria-label="收起選單" aria-expanded="true">
+              <svg><use href="#icon-chevron-down"></use></svg>
+              <span>收起</span>
             </button>
           </div>
           <div class="select-wrap">
@@ -120,6 +128,9 @@
               <button class="compact-action-button" id="newDancerButton" type="button" title="新增舞者" aria-label="新增舞者">
                 <svg><use href="#icon-plus"></use></svg>
                 <span>舞者</span>
+              </button>
+              <button class="mobile-dancer-toggle" id="dancerMenuToggle" type="button" title="收起舞者菜單" aria-label="收起舞者菜單" aria-expanded="true">
+                <svg><use href="#icon-chevron-down"></use></svg>
               </button>
             </div>
           </div>
@@ -161,8 +172,23 @@
               <svg><use href="#icon-trash"></use></svg>
               <span>刪除專案</span>
             </button>
+            <button class="text-button header-collapse-button" id="headerCollapseButton" type="button" title="收起頂部專案列" aria-label="收起頂部專案列" aria-expanded="true">
+              <svg><use href="#icon-chevron-down"></use></svg>
+              <span id="headerCollapseLabel">收起</span>
+            </button>
           </div>
         </header>
+
+        <div class="panel-expand-controls">
+          <button class="panel-expand-button" id="inspectorExpandButton" type="button" title="顯示隊形設定" aria-label="顯示隊形設定">
+            <svg><use href="#icon-settings"></use></svg>
+            <span>顯示設定</span>
+          </button>
+          <button class="panel-expand-button" id="timelineExpandButton" type="button" title="顯示隊形時間軸" aria-label="顯示隊形時間軸">
+            <svg><use href="#icon-skip-forward"></use></svg>
+            <span>顯示時間軸</span>
+          </button>
+        </div>
 
         <div class="workspace-body">
           <section class="stage-panel" id="stagePanel">
@@ -247,6 +273,10 @@
             </button>
             <div class="inspector-body" id="inspectorBody">
               <div class="inspector-tabs">
+                <button class="panel-inspector-collapse" id="inspectorCollapseButton" type="button" title="收起右側設定" aria-label="收起右側設定">
+                  <svg><use href="#icon-chevron-down"></use></svg>
+                  <span>收起</span>
+                </button>
                 <span class="inspector-tab is-active">隊形</span>
                 <span class="inspector-tab">舞者</span>
               </div>
@@ -371,6 +401,10 @@
                 <p class="panel-label">SEQUENCE</p>
                 <h2>隊形時間軸</h2>
               </div>
+              <button class="secondary-button secondary-button--compact timeline-collapse-button" id="timelineCollapseButton" type="button" title="收起隊形時間軸" aria-label="收起隊形時間軸">
+                <svg><use href="#icon-chevron-down"></use></svg>
+                收起
+              </button>
               <button class="secondary-button secondary-button--compact" id="newFormationButton" type="button">
                 <svg><use href="#icon-copy"></use></svg>
                 從目前隊形新增

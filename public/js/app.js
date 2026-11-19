@@ -11,8 +11,12 @@ const PANEL_LAYOUT_KEY = "hanabi-panel-layout";
 const COLLAB_USER_KEY = "hanabi-collaboration-user";
 const TEAM_DRAG_KEY = "hanabi-team-drag";
 const MULTI_SELECT_KEY = "hanabi-multi-select";
+const PANEL_COLLAPSE_KEY = "hanabi-panel-collapse";
 const mobileLayout = window.matchMedia(
   "(max-width: 720px), (any-pointer: coarse) and (max-width: 1366px), (max-width: 940px) and (orientation: landscape)"
+);
+const desktopCollapseLayout = window.matchMedia(
+  "(min-width: 941px)"
 );
 
 const elements = {
@@ -42,6 +46,16 @@ const elements = {
   sidebarResizer: $("#sidebarResizer"),
   inspectorResizer: $("#inspectorResizer"),
   timelineResizer: $("#timelineResizer"),
+  sidebarCollapseButton: $("#sidebarCollapseButton"),
+  sidebarCollapseLabel: $("#sidebarCollapseLabel"),
+  inspectorCollapseButton: $("#inspectorCollapseButton"),
+  timelineCollapseButton: $("#timelineCollapseButton"),
+  inspectorExpandButton: $("#inspectorExpandButton"),
+  timelineExpandButton: $("#timelineExpandButton"),
+  headerCollapseButton: $("#headerCollapseButton"),
+  headerCollapseLabel: $("#headerCollapseLabel"),
+  dancerMenuToggle: $("#dancerMenuToggle"),
+  mobileSidebarToggle: $("#mobileSidebarToggle"),
   canvasStageArea: $("#canvasStageArea"),
   emptyStage: $("#emptyStage"),
   playButton: $("#playButton"),
@@ -140,7 +154,16 @@ const state = {
   stageTheme: readPreference(STAGE_THEME_KEY, "light"),
   gridVisible: readPreference(STAGE_GRID_KEY, "true") !== "false",
   teamDragEnabled: readPreference(TEAM_DRAG_KEY, "false") === "true",
-  multiSelectEnabled: readPreference(MULTI_SELECT_KEY, "false") === "true"
+  multiSelectEnabled: readPreference(MULTI_SELECT_KEY, "false") === "true",
+  panelCollapse: {
+    header: false,
+    sidebar: false,
+    inspector: false,
+    timeline: false,
+    dancerMenu: false,
+    mobileSidebar: false,
+    ...(readJsonPreference(PANEL_COLLAPSE_KEY) ?? {})
+  }
 };
 
 const collaborationUser = createCollaborationUser();
@@ -200,6 +223,7 @@ async function init() {
   applyStageAppearance();
   applyTeamDragState();
   applyMultiSelectState();
+  applyPanelCollapseState();
   restoreStageSize();
   try {
     const payload = await api.listProjects();
@@ -243,6 +267,30 @@ function bindEvents() {
   elements.addTextButton.addEventListener("click", toggleAnnotationPlacement);
   elements.teamDragToggle.addEventListener("click", toggleTeamDrag);
   elements.multiSelectToggle.addEventListener("click", toggleMultiSelect);
+  elements.sidebarCollapseButton.addEventListener("click", () =>
+    togglePanelCollapse("sidebar")
+  );
+  elements.inspectorCollapseButton.addEventListener("click", () =>
+    togglePanelCollapse("inspector")
+  );
+  elements.timelineCollapseButton.addEventListener("click", () =>
+    togglePanelCollapse("timeline")
+  );
+  elements.inspectorExpandButton.addEventListener("click", () =>
+    togglePanelCollapse("inspector")
+  );
+  elements.timelineExpandButton.addEventListener("click", () =>
+    togglePanelCollapse("timeline")
+  );
+  elements.headerCollapseButton.addEventListener("click", () =>
+    togglePanelCollapse("header")
+  );
+  elements.dancerMenuToggle.addEventListener("click", () =>
+    togglePanelCollapse("dancerMenu")
+  );
+  elements.mobileSidebarToggle.addEventListener("click", () =>
+    togglePanelCollapse("mobileSidebar")
+  );
   elements.annotationForm.addEventListener("submit", submitAnnotationForm);
   elements.deleteAnnotationButton.addEventListener("click", deleteSelectedAnnotation);
   elements.stageThemeButton.addEventListener("click", toggleStageTheme);
@@ -258,6 +306,7 @@ function bindEvents() {
   window.addEventListener("beforeunload", () => collaboration.disconnect());
   bindPanelResizers();
   mobileLayout.addEventListener("change", initializeMobilePanels);
+  desktopCollapseLayout.addEventListener("change", applyPanelCollapseState);
   elements.inspectorToggle.addEventListener("click", () => toggleMobilePanel("inspector"));
   elements.timelineToggle.addEventListener("click", () => toggleMobilePanel("timeline"));
 
@@ -2103,6 +2152,7 @@ function initializeMobilePanels() {
   const expanded = !mobileLayout.matches;
   setMobilePanelExpanded("inspector", expanded);
   setMobilePanelExpanded("timeline", expanded);
+  applyPanelCollapseState();
 }
 
 function toggleMobilePanel(panelName) {
@@ -2225,6 +2275,104 @@ function applyMultiSelectState() {
     "aria-label",
     state.multiSelectEnabled ? "關閉舞者多選" : "開啟舞者多選"
   );
+}
+
+function togglePanelCollapse(panelName) {
+  state.panelCollapse[panelName] = !state.panelCollapse[panelName];
+  applyPanelCollapseState();
+  writePreference(PANEL_COLLAPSE_KEY, JSON.stringify(state.panelCollapse));
+}
+
+function applyPanelCollapseState() {
+  const collapsed = state.panelCollapse;
+  const useDesktopCollapse =
+    desktopCollapseLayout.matches && !mobileLayout.matches;
+  const useMobileHeader = mobileLayout.matches;
+  document.body.classList.toggle(
+    "is-sidebar-collapsed",
+    useDesktopCollapse && collapsed.sidebar
+  );
+  document.body.classList.toggle(
+    "is-inspector-collapsed",
+    useDesktopCollapse && collapsed.inspector
+  );
+  document.body.classList.toggle(
+    "is-timeline-collapsed",
+    useDesktopCollapse && collapsed.timeline
+  );
+  document.body.classList.toggle(
+    "is-header-collapsed",
+    (useDesktopCollapse || useMobileHeader) && collapsed.header
+  );
+  document.body.classList.toggle(
+    "is-dancer-menu-collapsed",
+    useMobileHeader && collapsed.dancerMenu
+  );
+  document.body.classList.toggle(
+    "is-mobile-sidebar-collapsed",
+    useMobileHeader && collapsed.mobileSidebar
+  );
+
+  elements.sidebarCollapseButton.title = collapsed.sidebar
+    ? "展開左側面板"
+    : "收起左側面板";
+  elements.sidebarCollapseButton.setAttribute(
+    "aria-label",
+    elements.sidebarCollapseButton.title
+  );
+  elements.sidebarCollapseButton.setAttribute(
+    "aria-expanded",
+    String(!collapsed.sidebar)
+  );
+  elements.sidebarCollapseLabel.textContent = collapsed.sidebar ? "展開" : "收起";
+
+  elements.inspectorCollapseButton.title = collapsed.inspector
+    ? "顯示隊形設定"
+    : "收起右側設定";
+  elements.inspectorCollapseButton.setAttribute(
+    "aria-expanded",
+    String(!collapsed.inspector)
+  );
+  elements.timelineCollapseButton.setAttribute(
+    "aria-expanded",
+    String(!collapsed.timeline)
+  );
+  elements.headerCollapseButton.title = collapsed.header
+    ? "展開頂部專案列"
+    : "收起頂部專案列";
+  elements.headerCollapseButton.setAttribute(
+    "aria-label",
+    elements.headerCollapseButton.title
+  );
+  elements.headerCollapseButton.setAttribute(
+    "aria-expanded",
+    String(!collapsed.header)
+  );
+  elements.headerCollapseLabel.textContent = collapsed.header ? "展開" : "收起";
+  elements.dancerMenuToggle.title = collapsed.dancerMenu
+    ? "展開舞者菜單"
+    : "收起舞者菜單";
+  elements.dancerMenuToggle.setAttribute(
+    "aria-label",
+    elements.dancerMenuToggle.title
+  );
+  elements.dancerMenuToggle.setAttribute(
+    "aria-expanded",
+    String(!collapsed.dancerMenu)
+  );
+  elements.mobileSidebarToggle.title = collapsed.mobileSidebar
+    ? "展開選單"
+    : "收起選單";
+  elements.mobileSidebarToggle.setAttribute(
+    "aria-label",
+    elements.mobileSidebarToggle.title
+  );
+  elements.mobileSidebarToggle.setAttribute(
+    "aria-expanded",
+    String(!collapsed.mobileSidebar)
+  );
+  elements.mobileSidebarToggle.querySelector("span").textContent =
+    collapsed.mobileSidebar ? "展開" : "收起";
 }
 
 function toggleStageGrid() {
