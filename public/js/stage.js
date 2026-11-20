@@ -1,10 +1,12 @@
 const TAU = Math.PI * 2;
 
 export class StageCanvas {
-  constructor(canvas, callbacks = {}) {
+  constructor(canvas, callbacks = {}, options = {}) {
     this.canvas = canvas;
     this.context = canvas.getContext("2d");
     this.callbacks = callbacks;
+    this.previewMode = Boolean(options.preview);
+    this.interactive = options.interactive !== false && !this.previewMode;
     this.project = null;
     this.dancers = [];
     this.formation = null;
@@ -32,11 +34,12 @@ export class StageCanvas {
     this.animation = null;
     this.animationFrame = null;
     this.layout = null;
-    this.theme = "light";
-    this.gridVisible = true;
+    this.theme = options.theme ?? "light";
+    this.gridVisible = options.gridVisible !== false;
 
     this.resizeObserver = new ResizeObserver(() => this.draw());
     this.resizeObserver.observe(canvas);
+    if (!this.interactive) return;
 
     canvas.addEventListener("pointerdown", (event) => this.handlePointerDown(event));
     canvas.addEventListener("pointermove", (event) => this.handlePointerMove(event));
@@ -199,6 +202,11 @@ export class StageCanvas {
     if (this.animationFrame) cancelAnimationFrame(this.animationFrame);
     this.animationFrame = null;
     this.animation = null;
+  }
+
+  destroy() {
+    this.cancelAnimation();
+    this.resizeObserver.disconnect();
   }
 
   runAnimationFrame() {
@@ -673,8 +681,9 @@ export class StageCanvas {
 
   dancerRadius(dancer = null) {
     if (!this.layout) return 15;
+    const minRadius = this.previewMode ? 6 : 10;
     const baseRadius = Math.max(
-      10,
+      minRadius,
       Math.min(21, Math.min(this.layout.width, this.layout.height) / 22)
     );
     return baseRadius * (dancer?.sizeScale ?? 1);
@@ -704,9 +713,11 @@ export class StageCanvas {
     const size = this.prepareCanvas();
     if (!this.project) return size;
 
-    const horizontalPadding = Math.max(22, Math.min(48, size.width * 0.05));
-    const topPadding = 60;
-    const bottomPadding = 66;
+    const horizontalPadding = this.previewMode
+      ? Math.max(6, Math.min(14, size.width * 0.04))
+      : Math.max(22, Math.min(48, size.width * 0.05));
+    const topPadding = this.previewMode ? 8 : 60;
+    const bottomPadding = this.previewMode ? 8 : 66;
     const availableWidth = Math.max(40, size.width - horizontalPadding * 2);
     const availableHeight = Math.max(40, size.height - topPadding - bottomPadding);
     const ratio = this.project.stageWidth / this.project.stageHeight;
@@ -741,10 +752,15 @@ export class StageCanvas {
   drawAnnotations() {
     this.annotationLayouts = [];
     const context = this.context;
-    const maxWidth = Math.max(90, Math.min(190, this.layout.width * 0.34));
+    const scale = this.previewMode
+      ? Math.max(0.45, Math.min(1, this.layout.width / 620))
+      : 1;
+    const maxWidth = this.previewMode
+      ? Math.max(56, Math.min(150, this.layout.width * 0.32))
+      : Math.max(90, Math.min(190, this.layout.width * 0.34));
 
     for (const annotation of this.annotations) {
-      const fontSize = annotation.fontSize ?? 14;
+      const fontSize = (annotation.fontSize ?? 14) * scale;
       const lineHeight = fontSize * 1.3;
       context.save();
       context.font = `700 ${fontSize}px "Aptos", "Segoe UI", "Noto Sans TC", sans-serif`;
@@ -753,8 +769,8 @@ export class StageCanvas {
         maxWidth,
         Math.max(...lines.map((line) => context.measureText(line).width), 24)
       );
-      const width = measuredWidth + 18;
-      const height = lines.length * lineHeight + 12;
+      const width = measuredWidth + 18 * scale;
+      const height = lines.length * lineHeight + 12 * scale;
       const point = this.stageToScreen(annotation.x, annotation.y);
       const left = Math.min(
         this.layout.x + this.layout.width - width - 5,
@@ -783,7 +799,11 @@ export class StageCanvas {
       context.textAlign = "left";
       context.textBaseline = "top";
       lines.forEach((line, index) => {
-        context.fillText(line, left + 9, top + 7 + index * lineHeight);
+        context.fillText(
+          line,
+          left + 9 * scale,
+          top + 7 * scale + index * lineHeight
+        );
       });
       context.restore();
 

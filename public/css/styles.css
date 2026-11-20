@@ -957,6 +957,151 @@ svg {
   background: #2d3a3f;
 }
 
+.stage-resize-handle::before {
+  position: absolute;
+  right: 34px;
+  bottom: 4px;
+  padding: 4px 7px;
+  color: #fff;
+  background: rgba(23, 27, 31, 0.88);
+  border-radius: 4px;
+  content: "拖曳調整舞台大小";
+  font-size: 10px;
+  font-weight: 650;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(4px);
+  transition: 150ms ease;
+}
+
+.stage-resize-handle:hover::before,
+.stage-resize-handle:focus-visible::before {
+  opacity: 1;
+  transform: none;
+}
+
+.stage-zoom-controls {
+  position: absolute;
+  z-index: 5;
+  right: 16px;
+  bottom: 64px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px 5px 10px;
+  background: rgba(251, 250, 246, 0.92);
+  border: 1px solid rgba(190, 186, 176, 0.72);
+  border-radius: 7px;
+  box-shadow: 0 8px 24px rgba(28, 30, 27, 0.14);
+  backdrop-filter: blur(9px);
+}
+
+.stage-zoom-title {
+  color: #777b76;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.stage-zoom-button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  color: #525653;
+  background: #fff;
+  border: 1px solid #d8d4ca;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: 140ms ease;
+}
+
+.stage-zoom-button:hover:not(:disabled) {
+  background: #fdfcf9;
+  border-color: #aaa69c;
+}
+
+.stage-zoom-button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.stage-zoom-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.stage-zoom-value {
+  min-width: 44px;
+  color: #3e433f;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  text-align: center;
+}
+
+.stage-zoom-reset {
+  height: 28px;
+  padding: 0 9px;
+  color: #777b76;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: 140ms ease;
+}
+
+.stage-zoom-reset:hover:not(:disabled) {
+  color: #414542;
+  background: #fff;
+  border-color: #d8d4ca;
+}
+
+.stage-zoom-reset:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.stage-panel.is-dark .stage-zoom-controls {
+  color: #bfc8c6;
+  background: rgba(23, 31, 34, 0.9);
+  border-color: rgba(87, 103, 107, 0.8);
+}
+
+.stage-panel.is-dark .stage-zoom-title {
+  color: #9dabaa;
+}
+
+.stage-panel.is-dark .stage-zoom-button {
+  color: #c4cdcb;
+  background: #263136;
+  border-color: #45545a;
+}
+
+.stage-panel.is-dark .stage-zoom-button:hover:not(:disabled) {
+  color: #fff;
+  background: #303d42;
+  border-color: #5d6e73;
+}
+
+.stage-panel.is-dark .stage-zoom-value {
+  color: #eef2f0;
+}
+
+.stage-panel.is-dark .stage-zoom-reset {
+  color: #bfc8c6;
+}
+
+.stage-panel.is-dark .stage-zoom-reset:hover:not(:disabled) {
+  color: #fff;
+  background: #263136;
+  border-color: #45545a;
+}
+
 .empty-stage {
   position: absolute;
   inset: 0;
@@ -1804,6 +1949,124 @@ body.is-resizing-panels .panel-resizer:active::after {
   width: min(780px, calc(100vw - 32px));
 }
 
+.modal--preview {
+  width: min(1180px, calc(100vw - 32px));
+}
+
+.preview-form {
+  max-height: calc(100vh - 32px);
+}
+
+.preview-summary {
+  margin: 6px 0 0;
+  color: #777b76;
+  font-size: 11px;
+}
+
+.formation-preview-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  align-content: start;
+  max-height: min(620px, calc(100vh - 250px));
+  padding-right: 4px;
+  overflow-y: auto;
+}
+
+.formation-preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  color: var(--ink);
+  text-align: left;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.formation-preview-card:hover {
+  border-color: #bbb7ad;
+  box-shadow: 0 10px 24px rgba(23, 27, 31, 0.1);
+  transform: translateY(-1px);
+}
+
+.formation-preview-card.is-current {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.formation-preview-canvas-frame {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  background: #e9e6de;
+  border-radius: 4px;
+}
+
+.formation-preview-canvas-frame canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.formation-preview-meta {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  align-items: flex-start;
+}
+
+.formation-preview-index {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  color: #8f4f39;
+  background: #fff3ed;
+  border: 1px solid #e5b5a4;
+  border-radius: 4px;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.formation-preview-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.formation-preview-copy strong {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.formation-preview-copy small {
+  color: #92948f;
+  font-size: 10px;
+}
+
+.preview-empty {
+  margin: 0;
+  padding: 32px 0;
+  color: #8c8d88;
+  font-size: 12px;
+  text-align: center;
+}
+
+.preview-hint {
+  margin-right: auto;
+  align-self: center;
+  color: #8c8d88;
+  font-size: 10px;
+}
+
 .modal::backdrop {
   background: rgba(15, 18, 20, 0.56);
   backdrop-filter: blur(4px);
@@ -2392,6 +2655,10 @@ body.is-resizing-panels .panel-resizer:active::after {
   .panel-expand-controls {
     display: none !important;
   }
+
+  .stage-zoom-controls {
+    display: none;
+  }
 }
 
 @media (max-width: 720px) {
@@ -2468,6 +2735,7 @@ body.is-resizing-panels .panel-resizer:active::after {
 
   .export-button,
   .duplicate-project-button,
+  .preview-project-button,
   .danger-action-button,
   #editProjectButton {
     display: inline-grid;
@@ -2478,8 +2746,22 @@ body.is-resizing-panels .panel-resizer:active::after {
 
   .export-button span,
   .duplicate-project-button span,
+  .preview-project-button span,
   .danger-action-button span,
   #editProjectButton span {
+    display: none;
+  }
+
+  .formation-preview-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+  }
+
+  .modal--preview .preview-form {
+    padding: 16px;
+  }
+
+  .preview-hint {
     display: none;
   }
 

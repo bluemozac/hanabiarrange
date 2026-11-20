@@ -12,6 +12,9 @@
       <symbol id="icon-plus" viewBox="0 0 24 24">
         <path d="M5 12h14M12 5v14" />
       </symbol>
+      <symbol id="icon-minus" viewBox="0 0 24 24">
+        <path d="M5 12h14" />
+      </symbol>
       <symbol id="icon-play" viewBox="0 0 24 24">
         <path d="m8 5 11 7-11 7Z" />
       </symbol>
@@ -53,6 +56,12 @@
       <symbol id="icon-grid" viewBox="0 0 24 24">
         <rect width="18" height="18" x="3" y="3" rx="2" />
         <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
+      </symbol>
+      <symbol id="icon-layout" viewBox="0 0 24 24">
+        <rect width="7" height="7" x="3" y="3" rx="1.5" />
+        <rect width="7" height="7" x="14" y="3" rx="1.5" />
+        <rect width="7" height="7" x="3" y="14" rx="1.5" />
+        <rect width="7" height="7" x="14" y="14" rx="1.5" />
       </symbol>
       <symbol id="icon-download" viewBox="0 0 24 24">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
@@ -156,6 +165,10 @@
               <span>已同步</span>
             </div>
             <div class="collaborator-presence" id="collaboratorPresence" aria-live="polite" aria-label="目前線上使用者"></div>
+            <button class="text-button preview-project-button" id="previewAllFormationsButton" type="button" title="預覽全部隊形" aria-label="預覽全部隊形">
+              <svg><use href="#icon-layout"></use></svg>
+              <span>隊形總覽</span>
+            </button>
             <button class="text-button export-button" id="exportPdfButton" type="button" title="匯出 PDF" aria-label="匯出 PDF">
               <svg><use href="#icon-download"></use></svg>
               <span>匯出 PDF</span>
@@ -259,6 +272,17 @@
                 <span id="transitionDirection">目前隊形</span>
                 <strong id="transitionTime">2.0s</strong>
               </div>
+            </div>
+            <div class="stage-zoom-controls" id="stageZoomControls" role="group" aria-label="舞台縮放" title="使用按鈕縮放舞台，或拖曳舞台右下角自由調整大小">
+              <span class="stage-zoom-title">舞台縮放</span>
+              <button class="stage-zoom-button" id="stageZoomOutButton" type="button" title="縮小舞台" aria-label="縮小舞台">
+                <svg><use href="#icon-minus"></use></svg>
+              </button>
+              <output class="stage-zoom-value" id="stageZoomValue" aria-live="off" aria-label="目前舞台縮放比例">100%</output>
+              <button class="stage-zoom-button" id="stageZoomInButton" type="button" title="放大舞台" aria-label="放大舞台">
+                <svg><use href="#icon-plus"></use></svg>
+              </button>
+              <button class="stage-zoom-reset" id="stageZoomResetButton" type="button" title="重設為符合視窗大小" aria-label="重設舞台縮放">重設</button>
             </div>
           </section>
 
@@ -582,6 +606,27 @@
           <button class="danger-text-button" id="deleteTeamButton" type="button">刪除目前隊伍</button>
           <span class="modal-action-spacer"></span>
           <button class="secondary-button" type="button" data-close-dialog="teamDialog">完成</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog class="modal modal--preview" id="formationPreviewDialog">
+      <div class="modal-form preview-form">
+        <div class="modal-header">
+          <div>
+            <p class="panel-label">ALL FORMATIONS</p>
+            <h2>隊形總覽</h2>
+            <p class="preview-summary" id="formationPreviewSummary"></p>
+          </div>
+          <button class="icon-button modal-close" type="button" data-close-dialog="formationPreviewDialog" title="關閉" aria-label="關閉">
+            <svg><use href="#icon-x"></use></svg>
+          </button>
+        </div>
+        <div class="formation-preview-grid" id="formationPreviewGrid"></div>
+        <p class="preview-empty" id="formationPreviewEmpty" hidden>此專案尚未建立隊形</p>
+        <div class="modal-actions">
+          <span class="preview-hint">點擊任一隊形即可跳回編輯</span>
+          <button class="secondary-button" type="button" data-close-dialog="formationPreviewDialog">關閉</button>
         </div>
       </div>
     </dialog>

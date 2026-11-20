@@ -43,6 +43,11 @@ const elements = {
   stageThemeIcon: $("#stageThemeIcon"),
   stageThemeLabel: $("#stageThemeLabel"),
   stageResizeHandle: $("#stageResizeHandle"),
+  stageZoomControls: $("#stageZoomControls"),
+  stageZoomOutButton: $("#stageZoomOutButton"),
+  stageZoomInButton: $("#stageZoomInButton"),
+  stageZoomResetButton: $("#stageZoomResetButton"),
+  stageZoomValue: $("#stageZoomValue"),
   sidebarResizer: $("#sidebarResizer"),
   inspectorResizer: $("#inspectorResizer"),
   timelineResizer: $("#timelineResizer"),
@@ -126,6 +131,11 @@ const elements = {
   deleteTeamButton: $("#deleteTeamButton"),
   exportPdfButton: $("#exportPdfButton"),
   duplicateProjectButton: $("#duplicateProjectButton"),
+  previewAllFormationsButton: $("#previewAllFormationsButton"),
+  formationPreviewDialog: $("#formationPreviewDialog"),
+  formationPreviewGrid: $("#formationPreviewGrid"),
+  formationPreviewEmpty: $("#formationPreviewEmpty"),
+  formationPreviewSummary: $("#formationPreviewSummary"),
   exportDialog: $("#exportDialog"),
   exportForm: $("#exportForm"),
   annotationDialog: $("#annotationDialog"),
@@ -179,6 +189,7 @@ const collaboration = new CollaborationClient({
 
 let formationSaveTimer = null;
 const pendingPositionChanges = new Map();
+let previewStages = [];
 let stageResizeState = null;
 let formationDragState = null;
 let teamDragState = null;
@@ -225,6 +236,9 @@ async function init() {
   applyMultiSelectState();
   applyPanelCollapseState();
   restoreStageSize();
+  new ResizeObserver(() => updateStageZoomReadout()).observe(
+    elements.canvasStageArea
+  );
   try {
     const payload = await api.listProjects();
     state.projects = payload.projects;
@@ -262,6 +276,17 @@ function bindEvents() {
   elements.saveTeamButton.addEventListener("click", saveSelectedTeam);
   elements.deleteTeamButton.addEventListener("click", deleteSelectedTeam);
   $("#newFormationButton").addEventListener("click", createFormationFromCurrent);
+  elements.previewAllFormationsButton.addEventListener("click", openFormationPreview);
+  elements.formationPreviewGrid.addEventListener("click", (event) => {
+    const card = event.target.closest("[data-preview-formation-id]");
+    if (!card) return;
+    elements.formationPreviewDialog.close();
+    selectFormation(Number(card.dataset.previewFormationId));
+  });
+  elements.formationPreviewDialog.addEventListener("close", () => {
+    destroyFormationPreview();
+    elements.formationPreviewGrid.innerHTML = "";
+  });
   elements.exportPdfButton.addEventListener("click", openExportDialog);
   elements.exportForm.addEventListener("submit", submitExportForm);
   elements.addTextButton.addEventListener("click", toggleAnnotationPlacement);
@@ -301,6 +326,9 @@ function bindEvents() {
   elements.stageResizeHandle.addEventListener("pointerup", endStageResize);
   elements.stageResizeHandle.addEventListener("pointercancel", endStageResize);
   elements.stageResizeHandle.addEventListener("dblclick", resetStageSize);
+  elements.stageZoomOutButton.addEventListener("click", () => stepStageZoom(-1));
+  elements.stageZoomInButton.addEventListener("click", () => stepStageZoom(1));
+  elements.stageZoomResetButton.addEventListener("click", resetStageSize);
   window.addEventListener("resize", clampStageFrame);
   window.addEventListener("resize", clampPanelLayout);
   window.addEventListener("beforeunload", () => collaboration.disconnect());
@@ -684,6 +712,7 @@ function renderAll() {
   renderStats();
   updateEmptyState();
   if (elements.teamDialog.open) renderTeamManager();
+  if (elements.formationPreviewDialog.open) renderFormationPreview();
 }
 
 function renderProjectSelect(preferredId = state.project?.id) {
@@ -712,6 +741,7 @@ function renderProjectMeta() {
   $("#editProjectButton").disabled = !project;
   $("#deleteProjectButton").disabled = !project;
   elements.duplicateProjectButton.disabled = !project;
+  elements.previewAllFormationsButton.disabled = !project;
   elements.stageFlipButton.disabled = !project;
   elements.teamDragToggle.disabled = !project;
   elements.multiSelectToggle.disabled = !project;
@@ -733,6 +763,7 @@ function renderProjectMeta() {
     "aria-label",
     project?.stageFlipped ? "恢復舞台方向" : "上下反轉舞台"
   );
+  updateStageZoomReadout();
 }
 
 function renderDancerList() {
@@ -2512,6 +2543,59 @@ function setStageFrameSize(width, height) {
   elements.canvasFrame.style.flex = "0 0 auto";
   elements.canvasFrame.style.width = `${Math.round(width)}px`;
   elements.canvasFrame.style.height = `${Math.round(height)}px`;
+  updateStageZoomReadout();
+}
+
+function getStageFitSize() {
+  const area = elements.canvasStageArea;
+  return {
+    width: Math.max(1, area.clientWidth),
+    height: Math.max(1, Math.min(620, area.clientHeight * 0.96))
+  };
+}
+
+function getStageZoomPercent() {
+  const fit = getStageFitSize();
+  const rect = elements.canvasFrame.getBoundingClientRect();
+  return Math.round((rect.width / fit.width) * 100);
+}
+
+function updateStageZoomReadout() {
+  const bounds = getStageResizeBounds();
+  const fit = getStageFitSize();
+  const hasProject = Boolean(state.project);
+  const percent = hasProject ? getStageZoomPercent() : 100;
+  const minPercent = Math.ceil((bounds.minWidth / fit.width) * 100);
+  const maxPercent = Math.floor((bounds.maxWidth / fit.width) * 100);
+
+  elements.stageZoomValue.textContent = hasProject ? `${percent}%` : "--";
+  elements.stageZoomOutButton.disabled = !hasProject || percent <= minPercent;
+  elements.stageZoomInButton.disabled = !hasProject || percent >= maxPercent;
+  elements.stageZoomResetButton.disabled = !hasProject;
+}
+
+function setStageZoom(percent) {
+  if (!state.project) return;
+  const fit = getStageFitSize();
+  const bounds = getStageResizeBounds();
+  setStageFrameSize(
+    clamp((fit.width * percent) / 100, bounds.minWidth, bounds.maxWidth),
+    clamp((fit.height * percent) / 100, bounds.minHeight, bounds.maxHeight)
+  );
+  centerStageScroll();
+  persistStageFrameSize();
+}
+
+function stepStageZoom(direction) {
+  if (!state.project) return;
+  const percent = Math.round(getStageZoomPercent() / 10) * 10 + direction * 10;
+  setStageZoom(clamp(percent, 20, 400));
+}
+
+function centerStageScroll() {
+  const area = elements.canvasStageArea;
+  area.scrollLeft = Math.max(0, (area.scrollWidth - area.clientWidth) / 2);
+  area.scrollTop = Math.max(0, (area.scrollHeight - area.clientHeight) / 2);
 }
 
 function getStageResizeBounds() {
@@ -2545,7 +2629,10 @@ function restoreStageSize() {
 }
 
 function clampStageFrame() {
-  if (!elements.canvasFrame.style.width || stageResizeState) return;
+  if (!elements.canvasFrame.style.width || stageResizeState) {
+    updateStageZoomReadout();
+    return;
+  }
   const rect = elements.canvasFrame.getBoundingClientRect();
   const bounds = getStageResizeBounds();
   setStageFrameSize(
@@ -2563,7 +2650,70 @@ function resetStageSize() {
   } catch {
     // Storage can be unavailable in privacy-restricted browser contexts.
   }
+  centerStageScroll();
+  updateStageZoomReadout();
   showToast("舞台顯示大小已重設");
+}
+
+function openFormationPreview() {
+  if (!state.project) return;
+  elements.formationPreviewDialog.showModal();
+  renderFormationPreview();
+}
+
+function renderFormationPreview() {
+  destroyFormationPreview();
+  const project = state.project;
+  if (!project) return;
+
+  const formations = project.formations ?? [];
+  const totalDuration = formations
+    .reduce((total, formation) => total + formation.transitionSeconds, 0)
+    .toFixed(1);
+  elements.formationPreviewSummary.textContent = formations.length
+    ? `${project.name} · ${formations.length} 個隊形 · 合計 ${totalDuration}s`
+    : `${project.name} · 尚未建立隊形`;
+  elements.formationPreviewEmpty.hidden = formations.length > 0;
+
+  elements.formationPreviewGrid.innerHTML = formations
+    .map((formation) => {
+      const dancerCount = Object.keys(formation.positions ?? {}).length;
+      const current = formation.id === state.selectedFormationId
+        ? " is-current"
+        : "";
+      return `
+        <button class="formation-preview-card${current}" type="button"
+          data-preview-formation-id="${formation.id}"
+          title="開啟 ${escapeHtml(formation.name)}">
+          <span class="formation-preview-canvas-frame"
+            style="aspect-ratio:${project.stageWidth} / ${project.stageHeight}">
+            <canvas aria-label="${escapeHtml(formation.name)} 隊形預覽"></canvas>
+          </span>
+          <span class="formation-preview-meta">
+            <span class="formation-preview-index">${String(formation.sequenceIndex + 1).padStart(2, "0")}</span>
+            <span class="formation-preview-copy">
+              <strong>${escapeHtml(formation.name)}</strong>
+              <small>${formation.transitionSeconds.toFixed(1)}s 轉場 · ${dancerCount} 位舞者</small>
+            </span>
+          </span>
+        </button>
+      `;
+    })
+    .join("");
+
+  elements.formationPreviewGrid.querySelectorAll("canvas").forEach((canvas, index) => {
+    const preview = new StageCanvas(canvas, {}, { preview: true });
+    preview.setTheme(state.stageTheme);
+    preview.setGridVisible(state.gridVisible);
+    preview.setProject(project);
+    preview.setFormation(formations[index]);
+    previewStages.push(preview);
+  });
+}
+
+function destroyFormationPreview() {
+  previewStages.forEach((preview) => preview.destroy());
+  previewStages = [];
 }
 
 function openExportDialog() {
