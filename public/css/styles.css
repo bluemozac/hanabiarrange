@@ -478,7 +478,20 @@ svg {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 9px;
+  gap: 4px;
+}
+
+.action-group {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.action-group + .action-group {
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
 }
 
 .history-controls {
@@ -2746,7 +2759,12 @@ body.is-resizing-panels .panel-resizer:active::after {
     flex: 1 1 100%;
     flex-wrap: wrap;
     justify-content: flex-end;
-    gap: 6px;
+    gap: 5px;
+  }
+
+  .action-group + .action-group {
+    padding-left: 5px;
+    border-left: 1px solid var(--line);
   }
 
   .save-state {

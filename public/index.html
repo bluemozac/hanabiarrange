@@ -168,12 +168,14 @@
             <h1 id="projectTitle">Hanabi Stage</h1>
           </div>
           <div class="workspace-actions">
-            <div class="save-state" id="saveState" aria-live="polite">
-              <svg><use href="#icon-check"></use></svg>
-              <span>已同步</span>
+            <div class="action-group" role="group" aria-label="儲存與協作狀態">
+              <div class="save-state" id="saveState" aria-live="polite">
+                <svg><use href="#icon-check"></use></svg>
+                <span>已同步</span>
+              </div>
+              <div class="collaborator-presence" id="collaboratorPresence" aria-live="polite" aria-label="目前線上使用者"></div>
             </div>
-            <div class="collaborator-presence" id="collaboratorPresence" aria-live="polite" aria-label="目前線上使用者"></div>
-            <div class="history-controls" role="group" aria-label="編輯歷史">
+            <div class="action-group history-controls" role="group" aria-label="編輯歷史">
               <button class="text-button history-button" id="undoButton" type="button" title="復原 (Ctrl+Z)" aria-label="復原" disabled>
                 <svg><use href="#icon-undo"></use></svg>
                 <span>復原</span>
@@ -183,26 +185,32 @@
                 <span>重做</span>
               </button>
             </div>
-            <button class="text-button preview-project-button" id="previewAllFormationsButton" type="button" title="預覽全部隊形" aria-label="預覽全部隊形">
-              <svg><use href="#icon-layout"></use></svg>
-              <span>隊形總覽</span>
-            </button>
-            <button class="text-button export-button" id="exportPdfButton" type="button" title="匯出 PDF" aria-label="匯出 PDF">
-              <svg><use href="#icon-download"></use></svg>
-              <span>匯出 PDF</span>
-            </button>
-            <button class="text-button duplicate-project-button" id="duplicateProjectButton" type="button" title="複製專案" aria-label="複製專案">
-              <svg><use href="#icon-copy"></use></svg>
-              <span>複製專案</span>
-            </button>
-            <button class="text-button" id="editProjectButton" type="button" title="舞台設定" aria-label="舞台設定">
-              <svg><use href="#icon-settings"></use></svg>
-              <span>舞台設定</span>
-            </button>
-            <button class="text-button danger-action-button" id="deleteProjectButton" type="button" title="刪除專案" aria-label="刪除專案">
-              <svg><use href="#icon-trash"></use></svg>
-              <span>刪除專案</span>
-            </button>
+            <div class="action-group" role="group" aria-label="隊形檢視">
+              <button class="text-button preview-project-button" id="previewAllFormationsButton" type="button" title="預覽全部隊形" aria-label="預覽全部隊形">
+                <svg><use href="#icon-layout"></use></svg>
+                <span>隊形總覽</span>
+              </button>
+            </div>
+            <div class="action-group" role="group" aria-label="檔案">
+              <button class="text-button export-button" id="exportPdfButton" type="button" title="匯出 PDF" aria-label="匯出 PDF">
+                <svg><use href="#icon-download"></use></svg>
+                <span>匯出 PDF</span>
+              </button>
+              <button class="text-button duplicate-project-button" id="duplicateProjectButton" type="button" title="複製專案" aria-label="複製專案">
+                <svg><use href="#icon-copy"></use></svg>
+                <span>複製專案</span>
+              </button>
+            </div>
+            <div class="action-group" role="group" aria-label="專案操作">
+              <button class="text-button" id="editProjectButton" type="button" title="舞台設定" aria-label="舞台設定">
+                <svg><use href="#icon-settings"></use></svg>
+                <span>舞台設定</span>
+              </button>
+              <button class="text-button danger-action-button" id="deleteProjectButton" type="button" title="刪除專案" aria-label="刪除專案">
+                <svg><use href="#icon-trash"></use></svg>
+                <span>刪除專案</span>
+              </button>
+            </div>
             <button class="text-button header-collapse-button" id="headerCollapseButton" type="button" title="收起頂部專案列" aria-label="收起頂部專案列" aria-expanded="true">
               <svg><use href="#icon-chevron-down"></use></svg>
               <span id="headerCollapseLabel">收起</span>
