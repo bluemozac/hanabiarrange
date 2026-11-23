@@ -1,4 +1,5 @@
 import { api } from "./api.js";
+import { EditHistory, captureProjectSnapshot } from "./history.js";
 import { CollaborationClient } from "./realtime.js";
 import { StageCanvas, clampStagePosition } from "./stage.js";
 
@@ -29,6 +30,8 @@ const elements = {
   connectionLabel: $("#connectionLabel"),
   saveState: $("#saveState"),
   collaboratorPresence: $("#collaboratorPresence"),
+  undoButton: $("#undoButton"),
+  redoButton: $("#redoButton"),
   stageFormationName: $("#stageFormationName"),
   stageDimensions: $("#stageDimensions"),
   stagePanel: $("#stagePanel"),
@@ -189,6 +192,12 @@ const collaboration = new CollaborationClient({
 
 let formationSaveTimer = null;
 const pendingPositionChanges = new Map();
+const pendingWrites = new Set();
+const editHistory = new EditHistory(50);
+let historyBusy = false;
+let pendingDragHistory = null;
+let pendingAnnotationHistory = null;
+let pendingSizeHistory = null;
 let previewStages = [];
 let stageResizeState = null;
 let formationDragState = null;
@@ -329,6 +338,9 @@ function bindEvents() {
   elements.stageZoomOutButton.addEventListener("click", () => stepStageZoom(-1));
   elements.stageZoomInButton.addEventListener("click", () => stepStageZoom(1));
   elements.stageZoomResetButton.addEventListener("click", resetStageSize);
+  elements.undoButton.addEventListener("click", () => applyHistory("undo"));
+  elements.redoButton.addEventListener("click", () => applyHistory("redo"));
+  document.addEventListener("keydown", handleHistoryShortcut);
   window.addEventListener("resize", clampStageFrame);
   window.addEventListener("resize", clampPanelLayout);
   window.addEventListener("beforeunload", () => collaboration.disconnect());
@@ -658,7 +670,14 @@ function persistPanelLayout() {
 async function loadProject(projectId, preferredFormationId = null, preferredDancerId = null) {
   try {
     const payload = await api.getProject(projectId);
+    const previousProjectId = state.project?.id ?? null;
     state.project = payload.project;
+    if (previousProjectId !== state.project.id) {
+      editHistory.clear();
+      pendingDragHistory = null;
+      pendingAnnotationHistory = null;
+      pendingSizeHistory = null;
+    }
     state.project.teams = state.project.teams ?? [];
     state.project.dancers = state.project.dancers.map((dancer) => ({
       ...dancer,
@@ -764,6 +783,7 @@ function renderProjectMeta() {
     project?.stageFlipped ? "恢復舞台方向" : "上下反轉舞台"
   );
   updateStageZoomReadout();
+  updateHistoryControls();
 }
 
 function renderDancerList() {
@@ -918,6 +938,7 @@ function renderTransport() {
     elements.transitionDirection.textContent = "目前隊形";
     elements.transitionTime.textContent = `${current?.transitionSeconds.toFixed(1) ?? "0.0"}s`;
   }
+  updateHistoryControls();
 }
 
 function renderStats() {
@@ -1048,6 +1069,9 @@ function submitAnnotationForm(event) {
   }
 
   const annotationId = elements.annotationIdInput.value;
+  const historyEntry = captureHistory(
+    annotationId ? "修改文字注解" : "新增文字注解"
+  );
   let annotation = formation.annotations.find((item) => item.id === annotationId);
   if (!annotation) {
     annotation = {
@@ -1065,6 +1089,7 @@ function submitAnnotationForm(event) {
   stage.setFormation(formation);
   stage.setSelectedAnnotation(annotation.id);
   scheduleAnnotationSave(formation.id);
+  commitHistory(historyEntry);
   elements.annotationDialog.close();
   showToast(annotationId ? "文字注解已更新" : "文字注解已新增");
 }
@@ -1075,11 +1100,13 @@ function deleteSelectedAnnotation() {
   if (!formation || !annotationId) return;
   const index = formation.annotations.findIndex((item) => item.id === annotationId);
   if (index < 0) return;
+  const historyEntry = captureHistory("刪除文字注解");
   formation.annotations.splice(index, 1);
   state.selectedAnnotationId = null;
   stage.setFormation(formation);
   stage.setSelectedAnnotation(null);
   scheduleAnnotationSave(formation.id);
+  commitHistory(historyEntry);
   elements.annotationDialog.close();
   showToast("文字注解已刪除");
 }
@@ -1088,6 +1115,9 @@ function handleAnnotationPositionChange(annotationId, position) {
   const formation = selectedFormation();
   const annotation = formation?.annotations.find((item) => item.id === annotationId);
   if (!annotation) return;
+  if (!pendingAnnotationHistory) {
+    pendingAnnotationHistory = captureHistory("移動文字注解");
+  }
   annotation.x = position.x;
   annotation.y = position.y;
   collaboration.sendDrag(formation.id, { annotationId, position });
@@ -1102,6 +1132,10 @@ function handleAnnotationPositionCommit(annotationId, position) {
   state.selectedAnnotationId = annotationId;
   stage.setSelectedAnnotation(annotationId);
   scheduleAnnotationSave(formation.id);
+  if (pendingAnnotationHistory) {
+    commitHistory(pendingAnnotationHistory);
+    pendingAnnotationHistory = null;
+  }
 }
 
 function scheduleAnnotationSave(formationId) {
@@ -1109,7 +1143,7 @@ function scheduleAnnotationSave(formationId) {
   setSaveState("saving", "儲存中");
   annotationSaveTimer = window.setTimeout(() => {
     annotationSaveTimer = null;
-    persistFormationAnnotations(formationId);
+    trackPendingWrite(persistFormationAnnotations(formationId));
   }, 220);
 }
 
@@ -1262,6 +1296,7 @@ function stepFormation(direction) {
 function handlePositionChange(dancerId, position) {
   const formation = selectedFormation();
   if (!formation) return;
+  if (!pendingDragHistory) pendingDragHistory = captureHistory("移動舞者");
   formation.positions[String(dancerId)] = { ...position };
   collaboration.sendDrag(formation.id, { dancerId, position });
   if (dancerId === state.selectedDancerId) {
@@ -1276,6 +1311,10 @@ function saveDancerPosition(dancerId, position) {
   if (!formation || !state.project || !position) return;
   formation.positions[String(dancerId)] = { ...position };
   queueFormationPositionSave(formation.id, dancerId, position);
+  if (pendingDragHistory) {
+    commitHistory(pendingDragHistory);
+    pendingDragHistory = null;
+  }
 }
 
 function queueFormationPositionSave(formationId, dancerId, position) {
@@ -1288,7 +1327,7 @@ function queueFormationPositionSave(formationId, dancerId, position) {
   setSaveState("saving", "儲存中");
   formationSaveTimer = window.setTimeout(() => {
     formationSaveTimer = null;
-    persistPendingPositions();
+    trackPendingWrite(persistPendingPositions());
   }, 220);
 }
 
@@ -1347,17 +1386,20 @@ function updateDancerFromCoordinates() {
   }
 
   const position = clampStagePosition({ x, y }, state.project);
+  const historyEntry = captureHistory("調整舞者座標");
   formation.positions[String(dancer.id)] = position;
   stage.updateDancerPosition(dancer.id, position);
   renderDancerInspector();
   renderDancerList();
   queueFormationPositionSave(formation.id, dancer.id, position);
+  commitHistory(historyEntry);
 }
 
 function previewDancerSize() {
   const dancer = selectedDancer();
   if (!dancer || !state.project) return;
   const sizeScale = Number(elements.dancerSizeInput.value) / 100;
+  if (!pendingSizeHistory) pendingSizeHistory = captureHistory("調整舞者大小");
   dancer.sizeScale = sizeScale;
   elements.dancerSizeOutput.textContent = `${elements.dancerSizeInput.value}%`;
   stage.setProject(state.project);
@@ -1365,7 +1407,11 @@ function previewDancerSize() {
   if (dancerSizeSaveTimer) window.clearTimeout(dancerSizeSaveTimer);
   dancerSizeSaveTimer = window.setTimeout(() => {
     dancerSizeSaveTimer = null;
-    persistDancerSize(dancer.id, sizeScale);
+    const historyEntry = pendingSizeHistory;
+    pendingSizeHistory = null;
+    trackPendingWrite(persistDancerSize(dancer.id, sizeScale)).then(() =>
+      commitHistory(historyEntry)
+    );
   }, 220);
 }
 
@@ -1451,6 +1497,7 @@ async function submitProjectForm(event) {
     defaultDancerScale: Number(elements.defaultDancerScaleInput.value) / 100
   };
 
+  const historyEntry = projectId ? captureHistory("更新舞台設定") : null;
   try {
     const payload = projectId
       ? await api.updateProject(projectId, values)
@@ -1458,6 +1505,7 @@ async function submitProjectForm(event) {
     elements.projectDialog.close();
     await refreshProjects(payload.project.id);
     await loadProject(payload.project.id, projectId ? state.selectedFormationId : null);
+    commitHistory(historyEntry);
     showToast(projectId ? "專案設定已更新" : "專案已建立");
   } catch (error) {
     showError(error);
@@ -1530,6 +1578,10 @@ async function deleteProject() {
     state.project = null;
     state.selectedFormationId = null;
     state.selectedDancerId = null;
+    editHistory.clear();
+    pendingDragHistory = null;
+    pendingAnnotationHistory = null;
+    pendingSizeHistory = null;
     await refreshProjects();
     if (state.projects.length > 0) {
       await loadProject(state.projects[0].id);
@@ -1662,6 +1714,7 @@ async function addTeam() {
     showToast("請輸入隊伍名稱", true);
     return;
   }
+  const historyEntry = captureHistory("新增隊伍");
   try {
     const payload = await api.createTeam(state.project.id, {
       name,
@@ -1674,6 +1727,7 @@ async function addTeam() {
     elements.teamColorInput.value = nextTeamColor();
     renderTeamManager();
     renderDancerInspector();
+    commitHistory(historyEntry);
     showToast("隊伍已新增");
   } catch (error) {
     showError(error);
@@ -1690,6 +1744,7 @@ async function saveSelectedTeam() {
     showToast("請輸入隊伍名稱", true);
     return;
   }
+  const historyEntry = captureHistory("更新隊伍資料");
   try {
     const payload = await api.updateTeam(state.project.id, team.id, {
       name,
@@ -1699,6 +1754,7 @@ async function saveSelectedTeam() {
     renderTeamManager();
     renderDancerList();
     renderDancerInspector();
+    commitHistory(historyEntry);
     showToast("隊伍資料已更新");
   } catch (error) {
     showError(error);
@@ -1725,12 +1781,14 @@ async function clearTeamMembers() {
 }
 
 async function updateTeamMembers(teamId, dancerIds) {
+  const historyEntry = captureHistory("更新隊伍成員");
   try {
     const payload = await api.setTeamMembers(state.project.id, teamId, dancerIds);
     state.project.teams = payload.teams;
     state.project.dancers = payload.dancers;
     renderAll();
     renderTeamManager();
+    commitHistory(historyEntry);
     showToast("隊伍成員已更新");
   } catch (error) {
     showError(error);
@@ -1745,6 +1803,7 @@ async function deleteSelectedTeam() {
   if (!window.confirm(`確定刪除隊伍「${team.name}」？舞者會保留並移到未分配。`)) {
     return;
   }
+  const historyEntry = captureHistory("刪除隊伍");
   try {
     await api.deleteTeam(state.project.id, team.id);
     state.project.teams = state.project.teams.filter((item) => item.id !== team.id);
@@ -1754,6 +1813,7 @@ async function deleteSelectedTeam() {
     state.selectedTeamId = state.project.teams[0]?.id ?? null;
     renderAll();
     renderTeamManager();
+    commitHistory(historyEntry);
     showToast("隊伍已刪除");
   } catch (error) {
     showError(error);
@@ -1815,8 +1875,9 @@ function endTeamDrag(event) {
     (card) => Number(card.dataset.teamId)
   );
   if (teamIds.every((id, index) => id === drag.startOrder[index])) return;
+  const historyEntry = captureHistory("調整隊伍順序");
   applyTeamOrder(teamIds);
-  persistTeamOrder(teamIds);
+  persistTeamOrder(teamIds, historyEntry);
 }
 
 function cancelTeamDrag(event) {
@@ -1841,11 +1902,12 @@ function applyTeamOrder(teamIds) {
   renderTeamManager();
 }
 
-async function persistTeamOrder(teamIds) {
+async function persistTeamOrder(teamIds, historyEntry = null) {
   try {
     const payload = await api.reorderTeams(state.project.id, teamIds);
     state.project.teams = payload.teams;
     renderTeamManager();
+    commitHistory(historyEntry);
     showToast("隊伍順序已更新");
   } catch (error) {
     showError(error);
@@ -1871,6 +1933,7 @@ function openDancerDialog() {
 async function submitDancerForm(event) {
   event.preventDefault();
   if (!state.project) return;
+  const historyEntry = captureHistory("新增舞者");
   try {
     const payload = await api.createDancer(state.project.id, {
       code: elements.newDancerCode.value.trim(),
@@ -1885,6 +1948,7 @@ async function submitDancerForm(event) {
     elements.dancerDialog.close();
     await loadProject(state.project.id, formationId, payload.dancer.id);
     await refreshProjects(state.project.id);
+    commitHistory(historyEntry);
     showToast(`舞者 ${payload.dancer.code} 已新增`);
   } catch (error) {
     showError(error);
@@ -1903,11 +1967,13 @@ async function submitDancerEdit(event) {
     return;
   }
   const position = clampStagePosition({ x, y }, state.project);
+  const historyEntry = captureHistory("更新舞者資料");
   try {
     if (dancerSizeSaveTimer) {
       window.clearTimeout(dancerSizeSaveTimer);
       dancerSizeSaveTimer = null;
     }
+    pendingSizeHistory = null;
     const payload = await api.updateDancer(state.project.id, dancer.id, {
       code: elements.dancerCodeInput.value.trim(),
       name: elements.dancerNameInput.value.trim(),
@@ -1925,6 +1991,7 @@ async function submitDancerEdit(event) {
     stage.setProject(state.project);
     renderDancerList();
     renderDancerInspector();
+    commitHistory(historyEntry);
     setSaveState("saved", "已儲存");
     showToast("舞者資料已更新");
   } catch (error) {
@@ -1938,10 +2005,12 @@ async function deleteSelectedDancer() {
   if (!dancer || !state.project) return;
   if (!window.confirm(`確定刪除舞者「${dancer.code}」？`)) return;
   const formationId = state.selectedFormationId;
+  const historyEntry = captureHistory("刪除舞者");
   try {
     await api.deleteDancer(state.project.id, dancer.id);
     await loadProject(state.project.id, formationId);
     await refreshProjects(state.project.id);
+    commitHistory(historyEntry);
     showToast(`舞者 ${dancer.code} 已刪除`);
   } catch (error) {
     showError(error);
@@ -1952,6 +2021,7 @@ async function submitFormationEdit(event) {
   event.preventDefault();
   const formation = selectedFormation();
   if (!formation || !state.project) return;
+  const historyEntry = captureHistory("更新隊形設定");
   try {
     const payload = await api.updateFormation(state.project.id, formation.id, {
       name: elements.formationNameInput.value.trim(),
@@ -1964,6 +2034,7 @@ async function submitFormationEdit(event) {
     renderFormationInspector();
     renderTransport();
     renderStats();
+    commitHistory(historyEntry);
     setSaveState("saved", "已儲存");
     showToast("隊形設定已更新");
   } catch (error) {
@@ -2037,8 +2108,9 @@ function endFormationDrag(event) {
     (card) => Number(card.dataset.formationId)
   );
   if (orderedIds.every((id, index) => id === drag.startOrder[index])) return;
+  const historyEntry = captureHistory("調整隊形順序");
   applyFormationOrder(orderedIds);
-  persistFormationOrder(orderedIds);
+  persistFormationOrder(orderedIds, historyEntry);
 }
 
 function cancelFormationDrag(event) {
@@ -2076,7 +2148,7 @@ function applyFormationOrder(formationIds) {
   renderStats();
 }
 
-async function persistFormationOrder(formationIds) {
+async function persistFormationOrder(formationIds, historyEntry = null) {
   if (!state.project) return;
   const projectId = state.project.id;
   const selectedFormationId = state.selectedFormationId;
@@ -2091,6 +2163,7 @@ async function persistFormationOrder(formationIds) {
       renderTransport();
       renderStats();
       setSaveState("saved", "已儲存");
+      commitHistory(historyEntry);
     }
   } catch (error) {
     setSaveState("error", "排序失敗");
@@ -2107,6 +2180,7 @@ async function createFormationFromCurrent() {
   }
 
   const nextNumber = state.project.formations.length + 1;
+  const historyEntry = captureHistory("新增隊形");
   try {
     const payload = await api.createFormation(state.project.id, {
       name: `隊形 ${nextNumber}`,
@@ -2120,6 +2194,7 @@ async function createFormationFromCurrent() {
     stage.setFormation(payload.formation);
     stage.setSelectedDancer(null);
     renderAll();
+    commitHistory(historyEntry);
     setSaveState("saved", "已儲存");
     showToast("已從目前隊形建立新隊形");
   } catch (error) {
@@ -2136,6 +2211,7 @@ async function deleteSelectedFormation() {
   }
   if (!window.confirm(`確定刪除隊形「${formation.name}」？`)) return;
 
+  const historyEntry = captureHistory("刪除隊形");
   const index = state.project.formations.findIndex((item) => item.id === formation.id);
   const preferredFormationId =
     state.project.formations[index - 1]?.id ??
@@ -2145,6 +2221,7 @@ async function deleteSelectedFormation() {
     await api.deleteFormation(state.project.id, formation.id);
     await loadProject(state.project.id, preferredFormationId);
     await refreshProjects(state.project.id);
+    commitHistory(historyEntry);
     showToast("隊形已刪除");
   } catch (error) {
     showError(error);
@@ -2158,6 +2235,133 @@ function replaceFormation(updated) {
     state.project.formations[index] = updated;
     state.project.formations.sort((a, b) => a.sequenceIndex - b.sequenceIndex);
   }
+}
+
+function captureHistory(label) {
+  if (!state.project || historyBusy) return null;
+  return { snapshot: captureProjectSnapshot(state.project), label };
+}
+
+function commitHistory(entry) {
+  if (!entry) return;
+  editHistory.record(entry.snapshot, entry.label);
+  updateHistoryControls();
+}
+
+function trackPendingWrite(promise) {
+  pendingWrites.add(promise);
+  promise.then(
+    () => pendingWrites.delete(promise),
+    () => pendingWrites.delete(promise)
+  );
+  return promise;
+}
+
+async function settlePendingWrites() {
+  if (formationSaveTimer) {
+    window.clearTimeout(formationSaveTimer);
+    formationSaveTimer = null;
+  }
+  if (annotationSaveTimer) {
+    window.clearTimeout(annotationSaveTimer);
+    annotationSaveTimer = null;
+  }
+  if (dancerSizeSaveTimer) {
+    window.clearTimeout(dancerSizeSaveTimer);
+    dancerSizeSaveTimer = null;
+  }
+  pendingPositionChanges.clear();
+  pendingDragHistory = null;
+  pendingAnnotationHistory = null;
+  if (pendingSizeHistory) {
+    commitHistory(pendingSizeHistory);
+    pendingSizeHistory = null;
+  }
+  await Promise.allSettled([...pendingWrites]);
+}
+
+function isEditableTarget(target) {
+  return (
+    target instanceof HTMLElement &&
+    Boolean(target.closest("input, textarea, select, [contenteditable='true']"))
+  );
+}
+
+function handleHistoryShortcut(event) {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey || event.repeat) return;
+  if (isEditableTarget(event.target) || document.querySelector("dialog[open]")) {
+    return;
+  }
+  const key = event.key.toLowerCase();
+  const undo = key === "z" && !event.shiftKey;
+  const redo = (key === "z" && event.shiftKey) || key === "y";
+  if (!undo && !redo) return;
+  event.preventDefault();
+  applyHistory(undo ? "undo" : "redo");
+}
+
+async function applyHistory(direction) {
+  if (!state.project || historyBusy || state.isPlaying || stage.isInteracting()) {
+    return;
+  }
+  if (direction === "undo" ? !editHistory.canUndo : !editHistory.canRedo) {
+    return;
+  }
+
+  await settlePendingWrites();
+  const current = captureProjectSnapshot(state.project);
+  const entry =
+    direction === "undo"
+      ? editHistory.undo(current)
+      : editHistory.redo(current);
+  if (!entry) return;
+
+  const projectId = state.project.id;
+  const formationId = state.selectedFormationId;
+  const dancerId = state.selectedDancerId;
+  historyBusy = true;
+  updateHistoryControls();
+  setSaveState("saving", direction === "undo" ? "復原中" : "重做中");
+  try {
+    await api.restoreProject(projectId, entry.snapshot);
+    await loadProject(projectId, formationId, dancerId);
+    await refreshProjects(projectId);
+    setSaveState("saved", "已同步");
+    showToast(
+      `${direction === "undo" ? "已復原" : "已重做"}${
+        entry.label ? `：${entry.label}` : ""
+      }`
+    );
+  } catch (error) {
+    setSaveState("error", direction === "undo" ? "復原失敗" : "重做失敗");
+    showError(error);
+  } finally {
+    historyBusy = false;
+    updateHistoryControls();
+  }
+}
+
+function updateHistoryControls() {
+  if (!elements.undoButton || !elements.redoButton) return;
+  const available = Boolean(state.project) && !historyBusy && !state.isPlaying;
+  const canUndo = available && editHistory.canUndo;
+  const canRedo = available && editHistory.canRedo;
+  elements.undoButton.disabled = !canUndo;
+  elements.redoButton.disabled = !canRedo;
+  elements.undoButton.title = canUndo
+    ? `復原：${editHistory.undoLabel} (Ctrl+Z)`
+    : "復原 (Ctrl+Z)";
+  elements.redoButton.title = canRedo
+    ? `重做：${editHistory.redoLabel} (Ctrl+Shift+Z)`
+    : "重做 (Ctrl+Shift+Z)";
+  elements.undoButton.setAttribute(
+    "aria-label",
+    canUndo ? `復原：${editHistory.undoLabel}` : "復原"
+  );
+  elements.redoButton.setAttribute(
+    "aria-label",
+    canRedo ? `重做：${editHistory.redoLabel}` : "重做"
+  );
 }
 
 function setSaveState(mode, label) {
@@ -2227,10 +2431,14 @@ async function flipStageOrientation() {
   const formationId = state.selectedFormationId;
   const dancerId = state.selectedDancerId;
   const nextFlipped = !state.project.stageFlipped;
+  const historyEntry = captureHistory(
+    nextFlipped ? "上下反轉舞台" : "恢復舞台方向"
+  );
   elements.stageFlipButton.disabled = true;
   try {
     await api.updateProject(projectId, { stageFlipped: nextFlipped });
     await loadProject(projectId, formationId, dancerId);
+    commitHistory(historyEntry);
     showToast(nextFlipped ? "舞台已上下反轉" : "舞台方向已恢復");
   } catch (error) {
     showError(error);

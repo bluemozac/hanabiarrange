@@ -51,6 +51,13 @@ export const api = {
     return request(`/api/projects/${projectId}/duplicate`, { method: "POST" });
   },
 
+  restoreProject(projectId, snapshot) {
+    return request(`/api/projects/${projectId}/restore`, {
+      method: "POST",
+      body: jsonBody({ snapshot })
+    });
+  },
+
   deleteProject(projectId) {
     return request(`/api/projects/${projectId}`, { method: "DELETE" });
   },

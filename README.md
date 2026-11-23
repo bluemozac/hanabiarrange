@@ -41,6 +41,7 @@
 - 選取舞者不再自動開啟設定浮層，只有主動點擊面板標題時才顯示
 - 舞台深色模式、網格開關與強化網格
 - `easeInOutCubic` 隊形間平滑走位預覽
+- 編輯復原與重做：按鈕與 `Ctrl/Cmd+Z`、`Ctrl/Cmd+Shift+Z`、`Ctrl+Y` 快捷鍵，涵蓋座標、注解、隊形、舞者、隊伍與舞台設定
 - 拖曳座標即時自動儲存
 - 匯出完整版或簡化版 PDF
 - 簡化版 PDF 採 A4 橫式，只保留隊形名稱與最大化舞台圖
@@ -57,6 +58,7 @@ hanabiarr/
 │  ├─ css/styles.css      # 響應式工作台樣式
 │  ├─ js/api.js           # 瀏覽器 API client
 │  ├─ js/app.js           # 頁面狀態與操作流程
+│  ├─ js/history.js       # 編輯快照與復原／重做堆疊
 │  ├─ js/stage.js         # Canvas 繪製、拖曳與動畫
 │  └─ index.html          # 主要工作台
 ├─ src/
@@ -179,6 +181,7 @@ sudo systemctl reload nginx
 | `GET` | `/api/projects` | 專案列表 |
 | `POST` | `/api/projects` | 新增專案與第一個隊形 |
 | `POST` | `/api/projects/:projectId/duplicate` | 完整複製專案 |
+| `POST` | `/api/projects/:projectId/restore` | 以編輯快照還原專案內容 |
 | `GET` | `/api/projects/:projectId` | 專案、舞者與隊形完整資料 |
 | `GET` | `/api/projects/:projectId/export.pdf?mode=full` | 匯出完整專案 PDF |
 | `GET` | `/api/projects/:projectId/export.pdf?mode=simple` | 匯出隊形名稱與舞台排位圖 |

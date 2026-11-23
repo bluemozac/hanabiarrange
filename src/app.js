@@ -11,7 +11,7 @@ function createApp(db) {
   const app = express();
 
   app.disable("x-powered-by");
-  app.use(express.json({ limit: "256kb" }));
+  app.use(express.json({ limit: "1mb" }));
 
   app.get("/api/health", (_request, response) => {
     response.json({ status: "ok", database: "connected" });

@@ -15,6 +15,14 @@
       <symbol id="icon-minus" viewBox="0 0 24 24">
         <path d="M5 12h14" />
       </symbol>
+      <symbol id="icon-undo" viewBox="0 0 24 24">
+        <path d="M9 14 4 9l5-5" />
+        <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H9" />
+      </symbol>
+      <symbol id="icon-redo" viewBox="0 0 24 24">
+        <path d="m15 14 5-5-5-5" />
+        <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H15" />
+      </symbol>
       <symbol id="icon-play" viewBox="0 0 24 24">
         <path d="m8 5 11 7-11 7Z" />
       </symbol>
@@ -165,6 +173,16 @@
               <span>已同步</span>
             </div>
             <div class="collaborator-presence" id="collaboratorPresence" aria-live="polite" aria-label="目前線上使用者"></div>
+            <div class="history-controls" role="group" aria-label="編輯歷史">
+              <button class="text-button history-button" id="undoButton" type="button" title="復原 (Ctrl+Z)" aria-label="復原" disabled>
+                <svg><use href="#icon-undo"></use></svg>
+                <span>復原</span>
+              </button>
+              <button class="text-button history-button" id="redoButton" type="button" title="重做 (Ctrl+Shift+Z)" aria-label="重做" disabled>
+                <svg><use href="#icon-redo"></use></svg>
+                <span>重做</span>
+              </button>
+            </div>
             <button class="text-button preview-project-button" id="previewAllFormationsButton" type="button" title="預覽全部隊形" aria-label="預覽全部隊形">
               <svg><use href="#icon-layout"></use></svg>
               <span>隊形總覽</span>

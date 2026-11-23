@@ -481,6 +481,23 @@ svg {
   gap: 9px;
 }
 
+.history-controls {
+  display: flex;
+  gap: 4px;
+}
+
+@media (max-width: 1280px) {
+  .history-button {
+    width: 34px;
+    min-height: 34px;
+    padding: 0;
+  }
+
+  .history-button span {
+    display: none;
+  }
+}
+
 .save-state {
   display: flex;
   align-items: center;
@@ -2703,7 +2720,7 @@ body.is-resizing-panels .panel-resizer:active::after {
   .workspace {
     height: auto;
     min-height: 0;
-    grid-template-rows: 76px auto auto;
+    grid-template-rows: auto auto auto;
     align-content: start;
     overflow: visible;
   }
@@ -2713,7 +2730,23 @@ body.is-resizing-panels .panel-resizer:active::after {
   }
 
   .workspace-header {
-    padding: 0 14px;
+    min-width: 0;
+    padding: 10px 14px;
+    flex-wrap: wrap;
+    align-content: center;
+    gap: 6px 12px;
+  }
+
+  .workspace-title {
+    flex: 1 1 auto;
+  }
+
+  .workspace-actions {
+    min-width: 0;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
   }
 
   .save-state {
